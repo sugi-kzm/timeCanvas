@@ -1,8 +1,16 @@
 import { create } from "zustand";
-import type { CalendarMode, Category, NewEntryInput, TimeEntry, ViewKind } from "../types";
-import { calendarRange, shiftAnchor, toLocalIso } from "../lib/dates";
+import type {
+  CalendarMode,
+  Category,
+  NewEntryInput,
+  Task,
+  TimeEntry,
+  ViewKind,
+} from "../types";
+import { calendarRange, fromLocalIso, shiftAnchor, toLocalIso } from "../lib/dates";
 import * as categoryRepo from "../db/categoryRepo";
 import * as entryRepo from "../db/entryRepo";
+import * as taskRepo from "../db/taskRepo";
 
 export interface QuickCreateState {
   /** 対象日の 0:00 の Date */
@@ -21,6 +29,7 @@ export type EditorState =
       startAt: string;
       endAt: string;
       categoryId: string | null;
+      taskId?: string | null;
     }
   | { mode: "edit"; entry: TimeEntry };
 
@@ -31,12 +40,16 @@ interface AppState {
   anchorDate: Date;
   entries: TimeEntry[];
   categories: Category[];
+  tasks: Task[];
+  /** タスクID → 実績合計（分） */
+  taskActualMinutes: ReadonlyMap<string, number>;
   hiddenCategoryIds: readonly string[];
   selectedEntryId: string | null;
   quickCreate: QuickCreateState | null;
   editor: EditorState | null;
   settingsOpen: boolean;
   statusMessage: string | null;
+  searchKeyword: string;
 
   init: () => Promise<void>;
   setView: (view: ViewKind) => void;
@@ -58,6 +71,16 @@ interface AppState {
   archiveCategory: (id: string) => Promise<void>;
   toggleCategoryHidden: (id: string) => void;
 
+  loadTasks: () => Promise<void>;
+  addTask: (title: string, categoryId: string | null) => Promise<void>;
+  updateTask: (task: Task) => Promise<void>;
+  toggleTaskDone: (task: Task) => Promise<void>;
+  removeTask: (id: string) => Promise<void>;
+
+  setSearchKeyword: (keyword: string) => void;
+  /** 検索結果などから該当エントリの週へ移動して選択する */
+  jumpToEntry: (entry: TimeEntry) => Promise<void>;
+
   selectEntry: (id: string | null) => void;
   openQuickCreate: (state: QuickCreateState) => void;
   closeQuickCreate: () => void;
@@ -77,19 +100,22 @@ export const useAppStore = create<AppState>((set, get) => ({
   anchorDate: new Date(),
   entries: [],
   categories: [],
+  tasks: [],
+  taskActualMinutes: new Map(),
   hiddenCategoryIds: [],
   selectedEntryId: null,
   quickCreate: null,
   editor: null,
   settingsOpen: false,
   statusMessage: null,
+  searchKeyword: "",
 
   init: async () => {
     try {
       await categoryRepo.ensureDefaultCategories();
       const categories = await categoryRepo.listCategories();
       set({ categories });
-      await get().reloadEntries();
+      await Promise.all([get().reloadEntries(), get().loadTasks()]);
     } catch (e) {
       set({ statusMessage: `初期化に失敗しました: ${String(e)}` });
     }
@@ -132,6 +158,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const created = await entryRepo.createEntry(input);
       set((s) => ({ entries: sortByStart([...s.entries, created]), quickCreate: null }));
+      if (created.taskId !== null) void get().loadTasks();
     } catch (e) {
       set({ statusMessage: `記録の作成に失敗しました: ${String(e)}` });
     }
@@ -144,6 +171,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         entries: sortByStart(s.entries.map((e) => (e.id === updated.id ? updated : e))),
         editor: null,
       }));
+      void get().loadTasks();
     } catch (e) {
       set({ statusMessage: `記録の更新に失敗しました: ${String(e)}` });
     }
@@ -157,6 +185,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         selectedEntryId: s.selectedEntryId === id ? null : s.selectedEntryId,
         editor: null,
       }));
+      void get().loadTasks();
     } catch (e) {
       set({ statusMessage: `記録の削除に失敗しました: ${String(e)}` });
     }
@@ -197,6 +226,69 @@ export const useAppStore = create<AppState>((set, get) => ({
         ? s.hiddenCategoryIds.filter((x) => x !== id)
         : [...s.hiddenCategoryIds, id],
     })),
+
+  loadTasks: async () => {
+    try {
+      const [tasks, taskActualMinutes] = await Promise.all([
+        taskRepo.listTasks(),
+        taskRepo.actualMinutesByTask(),
+      ]);
+      set({ tasks, taskActualMinutes });
+    } catch (e) {
+      set({ statusMessage: `タスクの読み込みに失敗しました: ${String(e)}` });
+    }
+  },
+
+  addTask: async (title, categoryId) => {
+    try {
+      const created = await taskRepo.createTask(title, categoryId);
+      set((s) => ({ tasks: [...s.tasks, created] }));
+    } catch (e) {
+      set({ statusMessage: `タスクの作成に失敗しました: ${String(e)}` });
+    }
+  },
+
+  updateTask: async (task) => {
+    try {
+      const updated = await taskRepo.updateTask(task);
+      set((s) => ({ tasks: s.tasks.map((t) => (t.id === updated.id ? updated : t)) }));
+    } catch (e) {
+      set({ statusMessage: `タスクの更新に失敗しました: ${String(e)}` });
+    }
+  },
+
+  toggleTaskDone: async (task) => {
+    const done = task.status !== "done";
+    await get().updateTask({
+      ...task,
+      status: done ? "done" : "open",
+      completedAt: done ? toLocalIso(new Date()) : null,
+    });
+  },
+
+  removeTask: async (id) => {
+    try {
+      await taskRepo.deleteTask(id);
+      set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
+      await get().loadTasks();
+    } catch (e) {
+      set({ statusMessage: `タスクの削除に失敗しました: ${String(e)}` });
+    }
+  },
+
+  setSearchKeyword: (keyword) => set({ searchKeyword: keyword }),
+
+  jumpToEntry: async (entry) => {
+    set({
+      searchKeyword: "",
+      view: "calendar",
+      calendarMode: "week",
+      anchorDate: fromLocalIso(entry.startAt),
+      selectedEntryId: entry.id,
+      quickCreate: null,
+    });
+    await get().reloadEntries();
+  },
 
   selectEntry: (id) => set({ selectedEntryId: id }),
   openQuickCreate: (state) => set({ quickCreate: state, selectedEntryId: null }),

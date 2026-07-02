@@ -27,6 +27,25 @@ export interface NewEntryInput {
   startAt: string;
   endAt: string;
   memo: string;
+  taskId?: string | null;
+}
+
+export type TaskStatus = "open" | "done";
+
+export interface Task {
+  id: string;
+  title: string;
+  memo: string;
+  categoryId: string | null;
+  /** 見積時間（分）。未設定は null */
+  estimateMinutes: number | null;
+  status: TaskStatus;
+  /** "YYYY-MM-DD" 形式の期限。未設定は null */
+  dueDate: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
 }
 
 export type ViewKind = "calendar" | "tasks" | "analytics" | "notes";

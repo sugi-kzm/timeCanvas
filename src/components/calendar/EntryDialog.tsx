@@ -8,6 +8,7 @@ function timePart(iso: string): string {
 export function EntryDialog() {
   const editor = useAppStore((s) => s.editor);
   const categories = useAppStore((s) => s.categories);
+  const tasks = useAppStore((s) => s.tasks);
   const addEntry = useAppStore((s) => s.addEntry);
   const modifyEntry = useAppStore((s) => s.modifyEntry);
   const removeEntry = useAppStore((s) => s.removeEntry);
@@ -24,6 +25,7 @@ export function EntryDialog() {
             start: timePart(editor.entry.startAt),
             end: timePart(editor.entry.endAt),
             memo: editor.entry.memo,
+            taskId: editor.entry.taskId,
           }
         : {
             title: editor.title,
@@ -32,6 +34,7 @@ export function EntryDialog() {
             start: timePart(editor.startAt),
             end: timePart(editor.endAt),
             memo: "",
+            taskId: editor.taskId ?? null,
           };
 
   const [title, setTitle] = useState(initial?.title ?? "");
@@ -40,8 +43,12 @@ export function EntryDialog() {
   const [start, setStart] = useState(initial?.start ?? "09:00");
   const [end, setEnd] = useState(initial?.end ?? "10:00");
   const [memo, setMemo] = useState(initial?.memo ?? "");
+  const [taskId, setTaskId] = useState<string | null>(initial?.taskId ?? null);
   const [error, setError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
+
+  // 選択肢: 未完了タスク + 現在紐付いているタスク（完了済みでも表示する）
+  const selectableTasks = tasks.filter((t) => t.status === "open" || t.id === taskId);
 
   useEffect(() => {
     titleRef.current?.focus();
@@ -59,9 +66,17 @@ export function EntryDialog() {
     const entryTitle = title.trim() === "" ? "無題" : title.trim();
 
     if (editor.mode === "edit") {
-      void modifyEntry({ ...editor.entry, title: entryTitle, categoryId, startAt, endAt, memo });
+      void modifyEntry({
+        ...editor.entry,
+        title: entryTitle,
+        categoryId,
+        startAt,
+        endAt,
+        memo,
+        taskId,
+      });
     } else {
-      void addEntry({ title: entryTitle, categoryId, startAt, endAt, memo });
+      void addEntry({ title: entryTitle, categoryId, startAt, endAt, memo, taskId });
       closeEditor();
     }
   };
@@ -144,6 +159,23 @@ export function EntryDialog() {
             />
           </label>
         </div>
+        {selectableTasks.length > 0 && (
+          <label className="field">
+            <span className="field-label">タスク（見積と実績を紐付け）</span>
+            <select
+              className="select-input"
+              value={taskId ?? ""}
+              onChange={(e) => setTaskId(e.target.value === "" ? null : e.target.value)}
+            >
+              <option value="">なし</option>
+              {selectableTasks.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="field">
           <span className="field-label">メモ</span>
           <textarea

@@ -7,6 +7,9 @@ import { Toolbar } from "./components/Toolbar";
 import { Sidebar } from "./components/sidebar/Sidebar";
 import { WeekView } from "./components/calendar/WeekView";
 import { MonthView } from "./components/calendar/MonthView";
+import { TasksView } from "./components/tasks/TasksView";
+import { SearchView } from "./components/search/SearchView";
+import { AnalyticsView } from "./components/analytics/AnalyticsView";
 import { QuickCreatePopover } from "./components/calendar/QuickCreatePopover";
 import { EntryDialog } from "./components/calendar/EntryDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -20,6 +23,7 @@ export default function App() {
   const init = useAppStore((s) => s.init);
   const view = useAppStore((s) => s.view);
   const calendarMode = useAppStore((s) => s.calendarMode);
+  const searchActive = useAppStore((s) => s.searchKeyword.trim() !== "");
   const quickCreate = useAppStore((s) => s.quickCreate);
   const editor = useAppStore((s) => s.editor);
   const settingsOpen = useAppStore((s) => s.settingsOpen);
@@ -60,6 +64,19 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [statusMessage, setStatus]);
 
+  // Ctrl+F で検索ボックスにフォーカス
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === "f") {
+        e.preventDefault();
+        useAppStore.getState().setView("calendar");
+        document.getElementById("entry-search-input")?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   return (
     <div className="app">
       <NavRail />
@@ -69,9 +86,19 @@ export default function App() {
             <Toolbar />
             <div className="app-body">
               <Sidebar />
-              {calendarMode === "month" ? <MonthView /> : <WeekView />}
+              {searchActive ? (
+                <SearchView />
+              ) : calendarMode === "month" ? (
+                <MonthView />
+              ) : (
+                <WeekView />
+              )}
             </div>
           </>
+        ) : view === "tasks" ? (
+          <TasksView />
+        ) : view === "analytics" ? (
+          <AnalyticsView />
         ) : (
           <div className="placeholder-view">
             <p>この画面は今後のフェーズで実装予定です</p>

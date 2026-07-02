@@ -1,38 +1,41 @@
 import { useAppStore } from "../store/appStore";
+import type { ViewKind } from "../types";
 import { IconCalendar, IconChart, IconGear, IconNotebook, IconTasks } from "./icons";
 
-const FUTURE_VIEWS = [
-  { key: "tasks", label: "タスク（Phase 2 で対応予定）", icon: <IconTasks /> },
-  { key: "analytics", label: "分析（Phase 3 で対応予定）", icon: <IconChart /> },
-  { key: "notes", label: "ノート（Phase 4 で対応予定）", icon: <IconNotebook /> },
-] as const;
+const VIEWS: { key: ViewKind; label: string; icon: React.ReactNode }[] = [
+  { key: "calendar", label: "カレンダー", icon: <IconCalendar /> },
+  { key: "tasks", label: "タスク", icon: <IconTasks /> },
+  { key: "analytics", label: "分析", icon: <IconChart /> },
+];
 
 export function NavRail() {
   const view = useAppStore((s) => s.view);
+  const setView = useAppStore((s) => s.setView);
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
 
   return (
     <nav className="nav-rail" aria-label="画面切替">
-      <button
-        type="button"
-        className={`rail-btn ${view === "calendar" ? "active" : ""}`}
-        title="カレンダー"
-        aria-label="カレンダー"
-      >
-        <IconCalendar />
-      </button>
-      {FUTURE_VIEWS.map((v) => (
+      {VIEWS.map((v) => (
         <button
           key={v.key}
           type="button"
-          className="rail-btn"
-          disabled
+          className={`rail-btn ${view === v.key ? "active" : ""}`}
           title={v.label}
           aria-label={v.label}
+          onClick={() => setView(v.key)}
         >
           {v.icon}
         </button>
       ))}
+      <button
+        type="button"
+        className="rail-btn"
+        disabled
+        title="ノート（Phase 4 で対応予定）"
+        aria-label="ノート（Phase 4 で対応予定）"
+      >
+        <IconNotebook />
+      </button>
       <div className="rail-spacer" />
       <button
         type="button"

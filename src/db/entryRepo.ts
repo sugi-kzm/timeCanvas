@@ -1,5 +1,6 @@
 import type { NewEntryInput, TimeEntry } from "../types";
 import { toLocalIso } from "../lib/dates";
+import { buildSearchQuery, type SearchParams } from "../lib/searchQuery";
 import { getDb } from "./database";
 
 interface EntryRow {
@@ -48,7 +49,7 @@ export async function createEntry(input: NewEntryInput): Promise<TimeEntry> {
     startAt: input.startAt,
     endAt: input.endAt,
     memo: input.memo,
-    taskId: null,
+    taskId: input.taskId ?? null,
     createdAt: now,
     updatedAt: now,
   };
@@ -75,14 +76,15 @@ export async function updateEntry(entry: TimeEntry): Promise<TimeEntry> {
   const updated: TimeEntry = { ...entry, updatedAt: toLocalIso(new Date()) };
   await db.execute(
     `UPDATE time_entries
-     SET title = $1, category_id = $2, start_at = $3, end_at = $4, memo = $5, updated_at = $6
-     WHERE id = $7`,
+     SET title = $1, category_id = $2, start_at = $3, end_at = $4, memo = $5, task_id = $6, updated_at = $7
+     WHERE id = $8`,
     [
       updated.title,
       updated.categoryId,
       updated.startAt,
       updated.endAt,
       updated.memo,
+      updated.taskId,
       updated.updatedAt,
       updated.id,
     ],
@@ -99,5 +101,13 @@ export async function deleteEntry(id: string): Promise<void> {
 export async function listAllEntries(): Promise<TimeEntry[]> {
   const db = await getDb();
   const rows = await db.select<EntryRow[]>("SELECT * FROM time_entries ORDER BY start_at");
+  return rows.map(rowToEntry);
+}
+
+/** キーワード・カテゴリ・期間でエントリを検索する */
+export async function searchEntries(params: SearchParams): Promise<TimeEntry[]> {
+  const db = await getDb();
+  const { sql, params: bindings } = buildSearchQuery(params);
+  const rows = await db.select<EntryRow[]>(sql, bindings);
   return rows.map(rowToEntry);
 }

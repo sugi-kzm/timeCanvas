@@ -36,6 +36,7 @@ export function QuickCreatePopover() {
       startAt,
       endAt,
       memo: "",
+      taskId: null,
     });
   };
 

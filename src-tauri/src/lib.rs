@@ -42,10 +42,11 @@ fn apply_linux_webkit_workarounds() {
 }
 
 fn migrations() -> Vec<Migration> {
-    vec![Migration {
-        version: 1,
-        description: "create_initial_tables",
-        sql: "
+    vec![
+        Migration {
+            version: 1,
+            description: "create_initial_tables",
+            sql: "
             CREATE TABLE IF NOT EXISTS categories (
                 id          TEXT PRIMARY KEY,
                 name        TEXT NOT NULL,
@@ -71,8 +72,31 @@ fn migrations() -> Vec<Migration> {
                 value TEXT NOT NULL
             );
         ",
-        kind: MigrationKind::Up,
-    }]
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "create_tasks",
+            sql: "
+            CREATE TABLE IF NOT EXISTS tasks (
+                id               TEXT PRIMARY KEY,
+                title            TEXT NOT NULL,
+                memo             TEXT NOT NULL DEFAULT '',
+                category_id      TEXT REFERENCES categories(id),
+                estimate_minutes INTEGER,
+                status           TEXT NOT NULL DEFAULT 'open',
+                due_date         TEXT,
+                sort_order       INTEGER NOT NULL DEFAULT 0,
+                created_at       TEXT NOT NULL,
+                updated_at       TEXT NOT NULL,
+                completed_at     TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+            CREATE INDEX IF NOT EXISTS idx_entries_task ON time_entries(task_id);
+        ",
+            kind: MigrationKind::Up,
+        },
+    ]
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

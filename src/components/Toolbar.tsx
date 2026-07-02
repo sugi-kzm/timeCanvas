@@ -16,6 +16,8 @@ export function Toolbar() {
   const goPrev = useAppStore((s) => s.goPrev);
   const goNext = useAppStore((s) => s.goNext);
   const setCalendarMode = useAppStore((s) => s.setCalendarMode);
+  const searchKeyword = useAppStore((s) => s.searchKeyword);
+  const setSearchKeyword = useAppStore((s) => s.setSearchKeyword);
 
   return (
     <header className="toolbar">
@@ -41,6 +43,20 @@ export function Toolbar() {
       </button>
       <h1 className="week-label">{calendarLabel(calendarMode, anchorDate)}</h1>
       <div className="toolbar-spacer" />
+      <input
+        id="entry-search-input"
+        type="search"
+        className="text-input search-box"
+        placeholder="記録を検索 (Ctrl+F)"
+        value={searchKeyword}
+        onChange={(e) => setSearchKeyword(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            setSearchKeyword("");
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+      />
       <div className="view-switch" role="group" aria-label="表示切替">
         {MODES.map((m) => (
           <button

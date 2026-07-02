@@ -752,6 +752,540 @@ button {
   color: var(--text-2);
 }
 
+/* ---------- タスク画面 ---------- */
+
+.tasks-view {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.tasks-inner {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 28px 32px 60px;
+}
+
+.tasks-heading {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 16px;
+}
+
+.tasks-subheading {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin: 24px 0 6px;
+}
+
+.task-add-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.task-add-category {
+  width: 130px;
+  flex: none;
+}
+
+.task-list-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 30px;
+  font-size: 11px;
+  color: var(--text-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.tlh-title {
+  flex: 1;
+}
+
+.tlh-category {
+  width: 130px;
+  flex: none;
+}
+
+.tlh-estimate {
+  width: 76px;
+  flex: none;
+}
+
+.tlh-actual {
+  width: 110px;
+  flex: none;
+}
+
+.tlh-actions {
+  width: 110px;
+  flex: none;
+}
+
+.tasks-empty {
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.7;
+  padding: 24px 8px;
+}
+
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.task-row:hover {
+  background: var(--hover);
+}
+
+.task-row.done .task-title-input {
+  text-decoration: line-through;
+  color: var(--text-3);
+}
+
+.task-title-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.task-title-input:hover,
+.task-title-input:focus {
+  background: var(--bg);
+  outline: 1px solid var(--border-strong);
+}
+
+.task-category {
+  width: 130px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-category-select {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-2);
+  cursor: pointer;
+  border-radius: 4px;
+  max-width: 105px;
+}
+
+.task-category-select:hover {
+  background: var(--hover);
+}
+
+.task-estimate {
+  width: 76px;
+  flex: none;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.task-estimate-input {
+  width: 52px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text);
+  padding: 3px 4px;
+  border-radius: 4px;
+  text-align: right;
+}
+
+.task-estimate-input:hover,
+.task-estimate-input:focus {
+  background: var(--bg);
+  outline: 1px solid var(--border-strong);
+}
+
+.task-actual {
+  width: 110px;
+  flex: none;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.task-actual.over {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.task-ratio {
+  color: var(--text-3);
+  font-weight: 400;
+}
+
+.task-actions {
+  width: 110px;
+  flex: none;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* ---------- 検索 ---------- */
+
+.search-box {
+  width: 220px;
+}
+
+.search-view {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.search-inner {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 20px 32px 60px;
+}
+
+.search-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.search-category-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 14px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: var(--hover);
+}
+
+.chip.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.search-period {
+  width: 110px;
+}
+
+.search-date {
+  width: 140px;
+}
+
+.search-summary {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin: 0 0 8px;
+}
+
+.search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.search-result {
+  display: grid;
+  grid-template-columns: 4px 170px 1fr 60px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 8px 8px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  border-radius: 4px;
+}
+
+.search-result:hover {
+  background: var(--hover);
+}
+
+.search-result-bar {
+  width: 4px;
+  height: 26px;
+  border-radius: 2px;
+}
+
+.search-result-date {
+  color: var(--text-2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.search-result-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result-duration {
+  text-align: right;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.search-result-memo {
+  grid-column: 3 / 5;
+  font-size: 12px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result mark {
+  background: #fff3c4;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* ---------- 分析画面 ---------- */
+
+.analytics-view {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.analytics-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 28px 32px 60px;
+}
+
+.analytics-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.analytics-period-label {
+  font-size: 15px;
+  font-weight: 600;
+  margin-left: 6px;
+}
+
+.analytics-section {
+  margin-bottom: 32px;
+}
+
+.analytics-heading {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.analytics-total {
+  font-size: 13px;
+  color: var(--text-2);
+  margin: 0 0 10px;
+}
+
+.analytics-total strong {
+  font-size: 16px;
+  color: var(--text);
+}
+
+.category-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.category-bars li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.category-bar-label {
+  width: 120px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-bar-track {
+  flex: 1;
+  height: 14px;
+  background: var(--panel);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.category-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+
+.category-bar-value {
+  width: 110px;
+  flex: none;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.estimate-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.estimate-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.estimate-title {
+  width: 200px;
+  flex: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.estimate-title.done {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.estimate-track {
+  flex: 1;
+  height: 14px;
+  background: var(--panel);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 見積=50% の位置に基準線を引き、実績バーの超過が一目で分かるようにする */
+.estimate-marker {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border-strong);
+  z-index: 1;
+}
+
+.estimate-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+}
+
+.estimate-fill.over {
+  background: var(--danger);
+}
+
+.estimate-value {
+  width: 160px;
+  flex: none;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.over-text {
+  color: var(--danger);
+}
+
+.heatmap-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.heatmap {
+  display: flex;
+  gap: 3px;
+}
+
+.heatmap-week {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.heatmap-cell {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
 /* ---------- ポップオーバー / ダイアログ ---------- */
 
 .popover-backdrop {
@@ -976,6 +1510,40 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---------- 幅の上書き ----------
+   .text-input / .select-input の width:100% より詳細度を上げて個別幅を効かせる */
+
+input.search-box {
+  width: 220px;
+  flex: none;
+}
+
+.task-add-row .text-input {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.task-add-row .task-add-category {
+  width: 150px;
+  flex: none;
+}
+
+.task-add-row .btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+select.search-period {
+  width: 120px;
+  flex: none;
+}
+
+input.search-date {
+  width: 150px;
+  flex: none;
 }
 
 /* ---------- トースト ---------- */
