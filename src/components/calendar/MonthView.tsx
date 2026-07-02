@@ -31,14 +31,15 @@ export function MonthView() {
 
   return (
     <div className="month-view">
-      <div className="month-dow-row">
-        {DOW_HEADER.map((label) => (
-          <span key={label} className="month-dow">
-            {label}
-          </span>
-        ))}
-      </div>
-      <div className="month-grid">
+      <div className="month-surface">
+        <div className="month-dow-row">
+          {DOW_HEADER.map((label) => (
+            <span key={label} className="month-dow">
+              {label}
+            </span>
+          ))}
+        </div>
+        <div className="month-grid">
         {days.map((day) => {
           const dayEntries = entriesByDate.get(dateKey(day)) ?? [];
           const overflow = dayEntries.length - MAX_CHIPS_PER_DAY;
@@ -73,6 +74,7 @@ export function MonthView() {
             </button>
           );
         })}
+        </div>
       </div>
     </div>
   );

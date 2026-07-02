@@ -31,9 +31,35 @@ export function MiniCalendar() {
   return (
     <section className="mini-calendar" aria-label="ミニカレンダー">
       <div className="mini-cal-header">
-        <span className="mini-cal-title">
-          {monthAnchor.getFullYear()}年{monthAnchor.getMonth() + 1}月
-        </span>
+        <select
+          className="mini-cal-select"
+          aria-label="年を選択"
+          value={monthAnchor.getFullYear()}
+          onChange={(e) =>
+            setMonthAnchor(new Date(Number(e.target.value), monthAnchor.getMonth(), 1))
+          }
+        >
+          {Array.from({ length: 12 }, (_, i) => monthAnchor.getFullYear() - 6 + i).map((y) => (
+            <option key={y} value={y}>
+              {y}年
+            </option>
+          ))}
+        </select>
+        <select
+          className="mini-cal-select"
+          aria-label="月を選択"
+          value={monthAnchor.getMonth() + 1}
+          onChange={(e) =>
+            setMonthAnchor(new Date(monthAnchor.getFullYear(), Number(e.target.value) - 1, 1))
+          }
+        >
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+            <option key={m} value={m}>
+              {m}月
+            </option>
+          ))}
+        </select>
+        <span className="mini-cal-spacer" />
         <button
           type="button"
           className="btn icon-btn small"

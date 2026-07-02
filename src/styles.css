@@ -1,19 +1,22 @@
 :root {
-  --accent: #2564cf;
-  --accent-hover: #1b4fa8;
-  --accent-soft: #e8f0fc;
+  --accent: #2383e2;
+  --accent-hover: #1a70c7;
+  --accent-soft: #e7f3fd;
   --bg: #ffffff;
-  --panel: #faf9f8;
-  --border: #edebe9;
-  --border-strong: #d2d0ce;
-  --grid-hour: #d8d6d4;
-  --grid-half: #d2d0ce;
-  --text: #252423;
-  --text-2: #605e5c;
-  --text-3: #a19f9d;
-  --danger: #d13438;
-  --now-line: #d13438;
-  --shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  --panel: #f7f7f5;
+  --hover: rgba(55, 53, 47, 0.06);
+  --border: #e9e9e7;
+  --border-strong: #d3d1cb;
+  --grid-hour: #deddd9;
+  --grid-half: #cfcec9;
+  --text: #37352f;
+  --text-2: #73726e;
+  --text-3: #a5a29a;
+  --danger: #e03e3e;
+  --now-line: #e03e3e;
+  --shadow:
+    0 8px 24px rgba(15, 15, 15, 0.1),
+    0 2px 6px rgba(15, 15, 15, 0.06);
   font-family: "Segoe UI", "Yu Gothic UI", "Meiryo", sans-serif;
   font-size: 14px;
   color: var(--text);
@@ -34,6 +37,7 @@ body,
 
 button {
   font-family: inherit;
+  color: inherit;
 }
 
 /* ---------- アプリシェル ---------- */
@@ -80,8 +84,8 @@ button {
 
 .rail-btn {
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border: none;
   border-radius: 6px;
   background: transparent;
@@ -93,7 +97,7 @@ button {
 }
 
 .rail-btn:hover:not(:disabled) {
-  background: #f3f2f1;
+  background: var(--hover);
 }
 
 .rail-btn.active {
@@ -104,9 +108,9 @@ button {
 .rail-btn.active::before {
   content: "";
   position: absolute;
-  left: -4px;
-  top: 8px;
-  bottom: 8px;
+  left: -5px;
+  top: 9px;
+  bottom: 9px;
   width: 3px;
   border-radius: 2px;
   background: var(--accent);
@@ -114,7 +118,7 @@ button {
 
 .rail-btn:disabled {
   color: var(--text-3);
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: default;
 }
 
@@ -128,38 +132,34 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border);
 }
 
 .app-title {
   font-weight: 600;
   margin-right: 8px;
-  color: var(--accent);
 }
 
 .week-label {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 600;
   margin: 0 0 0 8px;
 }
 
-.toolbar-spacer {
-  flex: 1;
-}
-
 .btn {
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 5px 12px;
   font-size: 13px;
   cursor: pointer;
+  transition: background 0.1s;
 }
 
 .btn:hover:not(:disabled) {
-  background: #f3f2f1;
+  background: var(--hover);
 }
 
 .btn:disabled {
@@ -179,11 +179,11 @@ button {
 
 .btn.danger {
   color: var(--danger);
-  border-color: var(--danger);
+  border-color: var(--border);
 }
 
 .btn.danger:hover:not(:disabled) {
-  background: #fdf3f4;
+  background: #fceeee;
 }
 
 .icon-btn {
@@ -204,37 +204,49 @@ button {
   font-size: 12px;
   cursor: pointer;
   padding: 2px 4px;
+  border-radius: 4px;
 }
 
 .link-btn:hover {
-  text-decoration: underline;
+  background: var(--accent-soft);
 }
 
 .view-switch {
   display: flex;
-  border: 1px solid var(--border-strong);
-  border-radius: 4px;
-  overflow: hidden;
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
 }
 
 .seg {
   border: none;
-  background: var(--bg);
-  padding: 5px 14px;
+  background: transparent;
+  padding: 4px 14px;
   font-size: 13px;
   cursor: pointer;
   color: var(--text-2);
+  border-radius: 4px;
+}
+
+.seg:hover:not(.active):not(:disabled) {
+  background: var(--hover);
 }
 
 .seg.active {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--bg);
+  color: var(--text);
   font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 15, 15, 0.08);
 }
 
 .seg:disabled {
   color: var(--text-3);
   cursor: default;
+}
+
+.toolbar-spacer {
+  flex: 1;
 }
 
 /* ---------- サイドパネル ---------- */
@@ -268,10 +280,24 @@ button {
   margin-bottom: 6px;
 }
 
-.mini-cal-title {
-  flex: 1;
+.mini-cal-select {
+  border: none;
+  background: transparent;
+  font-family: inherit;
   font-size: 13px;
   font-weight: 600;
+  color: var(--text);
+  padding: 2px 2px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.mini-cal-select:hover {
+  background: var(--hover);
+}
+
+.mini-cal-spacer {
+  flex: 1;
 }
 
 .mini-cal-grid {
@@ -293,12 +319,12 @@ button {
   font-size: 11px;
   color: var(--text);
   padding: 3px 0;
-  border-radius: 3px;
+  border-radius: 4px;
   cursor: pointer;
 }
 
 .mini-cal-day:hover {
-  background: #f3f2f1;
+  background: var(--hover);
 }
 
 .mini-cal-day.outside {
@@ -325,9 +351,14 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 3px 0;
+  padding: 3px 4px;
   font-size: 13px;
   cursor: pointer;
+  border-radius: 4px;
+}
+
+.category-item:hover {
+  background: var(--hover);
 }
 
 .category-dot {
@@ -383,7 +414,7 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------- 週カレンダー ---------- */
+/* ---------- 週 / 日カレンダー ---------- */
 
 .week-view {
   flex: 1;
@@ -474,6 +505,7 @@ button {
   position: relative;
   cursor: default;
   touch-action: none;
+  border-right: 1px solid var(--border);
 }
 
 .day-column {
@@ -487,20 +519,20 @@ button {
 }
 
 .day-column.today {
-  background: #fcfdff;
+  background: #fbfcfe;
 }
 
-/* 罫線: 正時=実線 / 30分=破線（Outlook 風）。
-   background-position は WeekView.tsx の HOUR_HEIGHT(64px) の半分に合わせる */
+/* 罫線: 正時=実線 / 30分=細かい破線（Outlook 風）。
+   background-position は WeekView.tsx の HOUR_HEIGHT(80px) の半分に合わせる */
 .hour-cell {
   border-bottom: 1px solid var(--grid-hour);
   background-image: repeating-linear-gradient(
     to right,
-    var(--grid-half) 0 6px,
-    transparent 6px 11px
+    var(--grid-half) 0 3px,
+    transparent 3px 7px
   );
   background-size: 100% 1px;
-  background-position: 0 32px;
+  background-position: 0 40px;
   background-repeat: no-repeat;
 }
 
@@ -509,7 +541,7 @@ button {
 .entry-block {
   position: absolute;
   border-left: 3px solid;
-  border-radius: 0 3px 3px 0;
+  border-radius: 4px;
   padding: 2px 6px;
   overflow: hidden;
   cursor: grab;
@@ -518,7 +550,7 @@ button {
 }
 
 .entry-block:hover {
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 1px 4px rgba(15, 15, 15, 0.16);
 }
 
 .entry-block.selected {
@@ -560,9 +592,9 @@ button {
   position: absolute;
   left: 1px;
   right: 3px;
-  background: rgba(37, 100, 207, 0.14);
+  background: rgba(35, 131, 226, 0.1);
   border: 1.5px dashed var(--accent);
-  border-radius: 3px;
+  border-radius: 4px;
   padding: 2px 6px;
   pointer-events: none;
   z-index: 5;
@@ -608,19 +640,26 @@ button {
 .month-view {
   flex: 1;
   min-width: 0;
+  overflow-y: auto;
+  background: var(--panel);
+  padding: 12px;
+}
+
+.month-surface {
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  min-height: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .month-dow-row {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
   background: var(--bg);
-  z-index: 5;
 }
 
 .month-dow {
@@ -653,8 +692,12 @@ button {
   min-width: 0;
 }
 
+.month-cell:nth-child(7n) {
+  border-right: none;
+}
+
 .month-cell:hover {
-  background: #f8f7f6;
+  background: var(--hover);
 }
 
 .month-cell.outside {
@@ -721,7 +764,7 @@ button {
   position: fixed;
   z-index: 21;
   background: var(--bg);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: var(--shadow);
   padding: 14px;
@@ -750,7 +793,7 @@ button {
   position: fixed;
   inset: 0;
   z-index: 30;
-  background: rgba(0, 0, 0, 0.32);
+  background: rgba(15, 15, 15, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -758,7 +801,7 @@ button {
 
 .dialog {
   background: var(--bg);
-  border-radius: 8px;
+  border-radius: 10px;
   box-shadow: var(--shadow);
   padding: 20px;
   width: 460px;
@@ -818,7 +861,7 @@ button {
   font-family: inherit;
   font-size: 13px;
   border: 1px solid var(--border-strong);
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 6px 8px;
   color: var(--text);
   background: var(--bg);
@@ -858,9 +901,13 @@ button {
   border-bottom: 2px solid transparent;
 }
 
+.tab:hover {
+  color: var(--text);
+}
+
 .tab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  color: var(--text);
+  border-bottom-color: var(--text);
   font-weight: 600;
 }
 
@@ -892,7 +939,7 @@ button {
   height: 28px;
   padding: 0;
   border: 1px solid var(--border-strong);
-  border-radius: 4px;
+  border-radius: 6px;
   background: none;
   cursor: pointer;
   flex: none;
@@ -943,7 +990,7 @@ button {
   color: #fff;
   font-size: 13px;
   padding: 10px 18px;
-  border-radius: 6px;
+  border-radius: 8px;
   box-shadow: var(--shadow);
   max-width: calc(100vw - 80px);
 }

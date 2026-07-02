@@ -21,7 +21,7 @@ import { layoutOverlaps, type Positioned } from "../../lib/layout";
 import { EntryBlock, type EntryDragMode } from "./EntryBlock";
 
 /** グリッドの寸法は固定（Outlook 同様、ウィンドウサイズに追従して伸縮しない） */
-export const HOUR_HEIGHT = 64;
+export const HOUR_HEIGHT = 80;
 export const DAY_WIDTH = 150;
 /** 日表示のときの1列の幅 */
 export const DAY_WIDTH_SINGLE = 480;
