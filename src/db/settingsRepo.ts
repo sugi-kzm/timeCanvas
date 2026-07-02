@@ -3,6 +3,7 @@ import { getDb } from "./database";
 export const SETTING_KEYS = {
   backupDir: "backup_dir",
   lastBackupAt: "last_backup_at",
+  notesDir: "notes_dir",
 } as const;
 
 export async function getSetting(key: string): Promise<string | null> {

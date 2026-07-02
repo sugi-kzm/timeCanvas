@@ -6,6 +6,7 @@ const VIEWS: { key: ViewKind; label: string; icon: React.ReactNode }[] = [
   { key: "calendar", label: "カレンダー", icon: <IconCalendar /> },
   { key: "tasks", label: "タスク", icon: <IconTasks /> },
   { key: "analytics", label: "分析", icon: <IconChart /> },
+  { key: "notes", label: "ノート", icon: <IconNotebook /> },
 ];
 
 export function NavRail() {
@@ -27,15 +28,6 @@ export function NavRail() {
           {v.icon}
         </button>
       ))}
-      <button
-        type="button"
-        className="rail-btn"
-        disabled
-        title="ノート（Phase 4 で対応予定）"
-        aria-label="ノート（Phase 4 で対応予定）"
-      >
-        <IconNotebook />
-      </button>
       <div className="rail-spacer" />
       <button
         type="button"

@@ -10,6 +10,7 @@ import { MonthView } from "./components/calendar/MonthView";
 import { TasksView } from "./components/tasks/TasksView";
 import { SearchView } from "./components/search/SearchView";
 import { AnalyticsView } from "./components/analytics/AnalyticsView";
+import { NotesView } from "./components/notes/NotesView";
 import { QuickCreatePopover } from "./components/calendar/QuickCreatePopover";
 import { EntryDialog } from "./components/calendar/EntryDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -100,9 +101,7 @@ export default function App() {
         ) : view === "analytics" ? (
           <AnalyticsView />
         ) : (
-          <div className="placeholder-view">
-            <p>この画面は今後のフェーズで実装予定です</p>
-          </div>
+          <NotesView />
         )}
       </div>
       {quickCreate !== null && <QuickCreatePopover />}

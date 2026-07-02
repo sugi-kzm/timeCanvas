@@ -1,4 +1,5 @@
 mod backup;
+mod notes;
 
 use tauri_plugin_sql::{Migration, MigrationKind};
 
@@ -129,7 +130,14 @@ pub fn run() {
             backup::detect_onedrive_dir,
             backup::ensure_dir,
             backup::write_text_file,
-            backup::stage_restore
+            backup::stage_restore,
+            notes::list_note_tree,
+            notes::read_note,
+            notes::write_note,
+            notes::create_note_dir,
+            notes::rename_note_path,
+            notes::delete_note_path,
+            notes::search_notes
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
