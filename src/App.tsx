@@ -6,6 +6,7 @@ import { NavRail } from "./components/NavRail";
 import { Toolbar } from "./components/Toolbar";
 import { Sidebar } from "./components/sidebar/Sidebar";
 import { WeekView } from "./components/calendar/WeekView";
+import { MonthView } from "./components/calendar/MonthView";
 import { QuickCreatePopover } from "./components/calendar/QuickCreatePopover";
 import { EntryDialog } from "./components/calendar/EntryDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -18,6 +19,7 @@ let lifecycleRegistered = false;
 export default function App() {
   const init = useAppStore((s) => s.init);
   const view = useAppStore((s) => s.view);
+  const calendarMode = useAppStore((s) => s.calendarMode);
   const quickCreate = useAppStore((s) => s.quickCreate);
   const editor = useAppStore((s) => s.editor);
   const settingsOpen = useAppStore((s) => s.settingsOpen);
@@ -67,7 +69,7 @@ export default function App() {
             <Toolbar />
             <div className="app-body">
               <Sidebar />
-              <WeekView />
+              {calendarMode === "month" ? <MonthView /> : <WeekView />}
             </div>
           </>
         ) : (

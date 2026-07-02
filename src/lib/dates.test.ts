@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   addDays,
   addMinutes,
+  buildMonthGrid,
+  calendarLabel,
+  calendarRange,
   clampMinutes,
+  dateKey,
   dayMinuteToIso,
   durationMinutes,
   formatHm,
@@ -11,6 +15,7 @@ import {
   fromLocalIso,
   isSameDay,
   minutesOfDay,
+  shiftAnchor,
   snapMinutes,
   snapMinutesFloor,
   startOfDay,
@@ -123,5 +128,57 @@ describe("表示フォーマット", () => {
 
   it("weekRangeLabel は年またぎで両方の年を表示", () => {
     expect(weekRangeLabel(new Date(2026, 11, 28))).toBe("2026年12月28日 - 2027年1月3日");
+  });
+});
+
+describe("カレンダーモード", () => {
+  const thursday = new Date(2026, 6, 2, 14, 30); // 2026-07-02 木
+
+  it("calendarRange: 日表示はその日 1 日分", () => {
+    const { from, to } = calendarRange("day", thursday);
+    expect(toLocalIso(from)).toBe("2026-07-02T00:00:00");
+    expect(toLocalIso(to)).toBe("2026-07-03T00:00:00");
+  });
+
+  it("calendarRange: 週表示は月曜からの 7 日分", () => {
+    const { from, to } = calendarRange("week", thursday);
+    expect(toLocalIso(from)).toBe("2026-06-29T00:00:00");
+    expect(toLocalIso(to)).toBe("2026-07-06T00:00:00");
+  });
+
+  it("calendarRange: 月表示は月初を含む週の月曜から 42 日分", () => {
+    const { from, to } = calendarRange("month", thursday);
+    // 2026-07-01 は水曜 → その週の月曜は 6/29
+    expect(toLocalIso(from)).toBe("2026-06-29T00:00:00");
+    expect(toLocalIso(to)).toBe("2026-08-10T00:00:00");
+  });
+
+  it("shiftAnchor: 日=±1日、週=±7日、月=±1ヶ月", () => {
+    expect(toLocalIso(shiftAnchor("day", thursday, 1)).slice(0, 10)).toBe("2026-07-03");
+    expect(toLocalIso(shiftAnchor("week", thursday, -1)).slice(0, 10)).toBe("2026-06-25");
+    expect(toLocalIso(shiftAnchor("month", thursday, 1)).slice(0, 10)).toBe("2026-08-01");
+  });
+
+  it("shiftAnchor: 月末から翌月へずれても月がスキップされない", () => {
+    // 1/31 の翌月は 2/1（Date の自動繰り上がりで 3 月に飛ばない）
+    const jan31 = new Date(2026, 0, 31);
+    expect(toLocalIso(shiftAnchor("month", jan31, 1)).slice(0, 10)).toBe("2026-02-01");
+  });
+
+  it("calendarLabel: モードごとの表示", () => {
+    expect(calendarLabel("day", thursday)).toBe("2026年7月2日（木）");
+    expect(calendarLabel("week", thursday)).toBe("2026年6月29日 - 7月5日");
+    expect(calendarLabel("month", thursday)).toBe("2026年7月");
+  });
+
+  it("buildMonthGrid: 42 日で月初の週の月曜から始まる", () => {
+    const grid = buildMonthGrid(thursday);
+    expect(grid).toHaveLength(42);
+    expect(toLocalIso(grid[0]).slice(0, 10)).toBe("2026-06-29");
+    expect(toLocalIso(grid[41]).slice(0, 10)).toBe("2026-08-09");
+  });
+
+  it("dateKey は YYYY-MM-DD を返す", () => {
+    expect(dateKey(new Date(2026, 6, 2, 23, 59))).toBe("2026-07-02");
   });
 });

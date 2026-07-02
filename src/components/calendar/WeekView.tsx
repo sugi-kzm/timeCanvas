@@ -15,13 +15,16 @@ import {
   snapMinutes,
   snapMinutesFloor,
   startOfDay,
+  startOfWeek,
 } from "../../lib/dates";
 import { layoutOverlaps, type Positioned } from "../../lib/layout";
 import { EntryBlock, type EntryDragMode } from "./EntryBlock";
 
 /** グリッドの寸法は固定（Outlook 同様、ウィンドウサイズに追従して伸縮しない） */
-export const HOUR_HEIGHT = 48;
+export const HOUR_HEIGHT = 64;
 export const DAY_WIDTH = 150;
+/** 日表示のときの1列の幅 */
+export const DAY_WIDTH_SINGLE = 480;
 const PX_PER_MIN = HOUR_HEIGHT / 60;
 const MIN_DURATION = 15;
 const CLICK_DEFAULT_DURATION = 30;
@@ -55,7 +58,8 @@ interface DayEntryPosition {
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 export function WeekView() {
-  const weekStart = useAppStore((s) => s.weekStart);
+  const calendarMode = useAppStore((s) => s.calendarMode);
+  const anchorDate = useAppStore((s) => s.anchorDate);
   const entries = useAppStore((s) => s.entries);
   const categories = useAppStore((s) => s.categories);
   const hiddenIds = useAppStore((s) => s.hiddenCategoryIds);
@@ -74,10 +78,13 @@ export function WeekView() {
   dragRef.current = drag;
   const [now, setNow] = useState(new Date());
 
-  const days = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
-    [weekStart],
-  );
+  const days = useMemo(() => {
+    if (calendarMode === "day") return [startOfDay(anchorDate)];
+    const weekStart = startOfWeek(anchorDate);
+    return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  }, [calendarMode, anchorDate]);
+
+  const dayWidth = calendarMode === "day" ? DAY_WIDTH_SINGLE : DAY_WIDTH;
 
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
@@ -115,7 +122,10 @@ export function WeekView() {
   const pointToDayMin = (clientX: number, clientY: number) => {
     const rect = columnsRef.current?.getBoundingClientRect();
     if (!rect) return { dayIndex: 0, minute: 0 };
-    const dayIndex = Math.max(0, Math.min(6, Math.floor((clientX - rect.left) / DAY_WIDTH)));
+    const dayIndex = Math.max(
+      0,
+      Math.min(days.length - 1, Math.floor((clientX - rect.left) / dayWidth)),
+    );
     const minute = clampMinutes((clientY - rect.top) / PX_PER_MIN);
     return { dayIndex, minute };
   };
@@ -254,7 +264,7 @@ export function WeekView() {
             <div
               key={day.toDateString()}
               className={`day-head ${isSameDay(day, now) ? "today" : ""}`}
-              style={{ width: DAY_WIDTH }}
+              style={{ width: dayWidth }}
             >
               <span className="day-head-dow">{DOW_LABELS[day.getDay()]}</span>
               <span className="day-head-date">{day.getDate()}</span>
@@ -293,7 +303,7 @@ export function WeekView() {
                 <div
                   key={day.toDateString()}
                   className={`day-column ${isToday ? "today" : ""}`}
-                  style={{ width: DAY_WIDTH }}
+                  style={{ width: dayWidth }}
                 >
                   {HOURS.map((h) => (
                     <div key={h} className="hour-cell" style={{ height: HOUR_HEIGHT }} />

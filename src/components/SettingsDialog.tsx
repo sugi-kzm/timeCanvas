@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { invoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../store/appStore";
 import { CATEGORY_PALETTE } from "../lib/colors";
@@ -186,6 +187,26 @@ function DataTab() {
     }
   };
 
+  const restoreBackup = async () => {
+    const path = await open({
+      title: "復元するバックアップファイルを選択",
+      filters: [{ name: "TimeCanvas バックアップ", extensions: ["db"] }],
+    });
+    if (typeof path !== "string") return;
+    const ok = window.confirm(
+      "現在のデータを、選択したバックアップの内容で置き換えます。よろしいですか？\n" +
+        "（現在のデータは timecanvas-pre-restore-*.db としてデータフォルダに残ります。\n" +
+        "続行するとアプリが再起動します）",
+    );
+    if (!ok) return;
+    try {
+      await invoke("stage_restore", { src: path });
+      await relaunch();
+    } catch (e) {
+      setStatus(`復元の準備に失敗しました: ${String(e)}`);
+    }
+  };
+
   const exportData = async (format: "json" | "csv") => {
     const path = await save({
       title: "エクスポート先を選択",
@@ -234,9 +255,18 @@ function DataTab() {
           今すぐバックアップ
         </button>
       </div>
+      <h3 className="settings-heading">復元</h3>
+      <div className="settings-row">
+        <span className="settings-value">
+          バックアップファイル（timecanvas-backup-*.db）からデータを復元します
+        </span>
+        <button type="button" className="btn" onClick={() => void restoreBackup()}>
+          バックアップから復元…
+        </button>
+      </div>
       <p className="settings-hint">
-        復元：新しい PC では初回起動後にこの画面から復元機能を追加予定です。それまでは
-        バックアップファイル（timecanvas-backup-*.db）を保管しておいてください。
+        新しい PC への引き継ぎ：アプリをインストール後、この画面から OneDrive
+        内のバックアップファイルを選ぶだけで記録を引き継げます。復元時にアプリは再起動します。
       </p>
       <h3 className="settings-heading">エクスポート</h3>
       <div className="settings-row">

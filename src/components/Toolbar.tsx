@@ -1,12 +1,21 @@
 import { useAppStore } from "../store/appStore";
-import { weekRangeLabel } from "../lib/dates";
+import { calendarLabel } from "../lib/dates";
+import type { CalendarMode } from "../types";
 import { IconChevronLeft, IconChevronRight } from "./icons";
 
+const MODES: { key: CalendarMode; label: string }[] = [
+  { key: "day", label: "日" },
+  { key: "week", label: "週" },
+  { key: "month", label: "月" },
+];
+
 export function Toolbar() {
-  const weekStart = useAppStore((s) => s.weekStart);
+  const calendarMode = useAppStore((s) => s.calendarMode);
+  const anchorDate = useAppStore((s) => s.anchorDate);
   const goToday = useAppStore((s) => s.goToday);
-  const goPrevWeek = useAppStore((s) => s.goPrevWeek);
-  const goNextWeek = useAppStore((s) => s.goNextWeek);
+  const goPrev = useAppStore((s) => s.goPrev);
+  const goNext = useAppStore((s) => s.goNext);
+  const setCalendarMode = useAppStore((s) => s.setCalendarMode);
 
   return (
     <header className="toolbar">
@@ -17,31 +26,32 @@ export function Toolbar() {
       <button
         type="button"
         className="btn icon-btn"
-        aria-label="前の週"
-        onClick={() => void goPrevWeek()}
+        aria-label="前へ"
+        onClick={() => void goPrev()}
       >
         <IconChevronLeft />
       </button>
       <button
         type="button"
         className="btn icon-btn"
-        aria-label="次の週"
-        onClick={() => void goNextWeek()}
+        aria-label="次へ"
+        onClick={() => void goNext()}
       >
         <IconChevronRight />
       </button>
-      <h1 className="week-label">{weekRangeLabel(weekStart)}</h1>
+      <h1 className="week-label">{calendarLabel(calendarMode, anchorDate)}</h1>
       <div className="toolbar-spacer" />
       <div className="view-switch" role="group" aria-label="表示切替">
-        <button type="button" className="seg" disabled title="日表示（今後対応）">
-          日
-        </button>
-        <button type="button" className="seg active">
-          週
-        </button>
-        <button type="button" className="seg" disabled title="月表示（今後対応）">
-          月
-        </button>
+        {MODES.map((m) => (
+          <button
+            key={m.key}
+            type="button"
+            className={`seg ${calendarMode === m.key ? "active" : ""}`}
+            onClick={() => void setCalendarMode(m.key)}
+          >
+            {m.label}
+          </button>
+        ))}
       </div>
     </header>
   );

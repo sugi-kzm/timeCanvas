@@ -83,16 +83,29 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations(DB_URL, migrations())
                 .build(),
         )
+        .setup(|app| {
+            use tauri::Manager;
+            // DB 接続が開かれる前に、復元待ちのバックアップがあれば差し替える
+            let dir = app.path().app_config_dir()?;
+            match backup::apply_pending_restore(&dir) {
+                Ok(true) => eprintln!("TimeCanvas: バックアップからの復元を適用しました"),
+                Ok(false) => {}
+                Err(e) => eprintln!("TimeCanvas: 復元の適用に失敗しました: {e}"),
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             backup::prune_backups,
             backup::detect_onedrive_dir,
             backup::ensure_dir,
-            backup::write_text_file
+            backup::write_text_file,
+            backup::stage_restore
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

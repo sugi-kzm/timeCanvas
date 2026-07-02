@@ -8,7 +8,6 @@
   --border-strong: #d2d0ce;
   --grid-hour: #d8d6d4;
   --grid-half: #d2d0ce;
-  --grid-quarter: #e8e6e4;
   --text: #252423;
   --text-2: #605e5c;
   --text-3: #a19f9d;
@@ -491,18 +490,17 @@ button {
   background: #fcfdff;
 }
 
-/* 罫線: 正時=実線 / 30分=破線 / 15分・45分=細かい点線（Outlook 風） */
+/* 罫線: 正時=実線 / 30分=破線（Outlook 風）。
+   background-position は WeekView.tsx の HOUR_HEIGHT(64px) の半分に合わせる */
 .hour-cell {
   border-bottom: 1px solid var(--grid-hour);
-  background-image:
-    repeating-linear-gradient(to right, var(--grid-quarter) 0 2px, transparent 2px 6px),
-    repeating-linear-gradient(to right, var(--grid-half) 0 6px, transparent 6px 11px),
-    repeating-linear-gradient(to right, var(--grid-quarter) 0 2px, transparent 2px 6px);
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--grid-half) 0 6px,
+    transparent 6px 11px
+  );
   background-size: 100% 1px;
-  background-position:
-    0 11px,
-    0 23px,
-    0 35px;
+  background-position: 0 32px;
   background-repeat: no-repeat;
 }
 
@@ -603,6 +601,112 @@ button {
   height: 8px;
   border-radius: 50%;
   background: var(--now-line);
+}
+
+/* ---------- 月表示 ---------- */
+
+.month-view {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.month-dow-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 5;
+}
+
+.month-dow {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-2);
+  padding: 6px 0;
+}
+
+.month-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-rows: minmax(104px, 1fr);
+}
+
+.month-cell {
+  border: none;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  text-align: left;
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  cursor: pointer;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.month-cell:hover {
+  background: #f8f7f6;
+}
+
+.month-cell.outside {
+  background: var(--panel);
+}
+
+.month-cell.outside .month-date {
+  color: var(--text-3);
+}
+
+.month-date {
+  font-size: 13px;
+  font-weight: 600;
+  align-self: flex-start;
+  padding: 1px 6px;
+  border-radius: 9px;
+}
+
+.month-date.today {
+  background: var(--accent);
+  color: #fff;
+}
+
+.month-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  min-width: 0;
+}
+
+.month-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.month-chip-time {
+  color: var(--text-2);
+  flex: none;
+}
+
+.month-chip-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.month-more {
+  font-size: 11px;
+  color: var(--text-2);
 }
 
 /* ---------- ポップオーバー / ダイアログ ---------- */

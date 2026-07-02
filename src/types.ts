@@ -30,3 +30,5 @@ export interface NewEntryInput {
 }
 
 export type ViewKind = "calendar" | "tasks" | "analytics" | "notes";
+
+export type CalendarMode = "day" | "week" | "month";

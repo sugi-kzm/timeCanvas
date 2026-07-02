@@ -1,3 +1,5 @@
+import type { CalendarMode } from "../types";
+
 export const SNAP_MINUTES = 15;
 export const MINUTES_PER_DAY = 24 * 60;
 
@@ -105,4 +107,47 @@ export const DOW_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as c
 /** 指定日の 0:00 に分を加えたローカル ISO 文字列 */
 export function dayMinuteToIso(day: Date, minute: number): string {
   return toLocalIso(addMinutes(startOfDay(day), minute));
+}
+
+// ---------- カレンダーモード（日 / 週 / 月） ----------
+
+/** モードに応じたエントリ読み込み範囲 [from, to) */
+export function calendarRange(mode: CalendarMode, anchor: Date): { from: Date; to: Date } {
+  if (mode === "day") {
+    const from = startOfDay(anchor);
+    return { from, to: addDays(from, 1) };
+  }
+  if (mode === "week") {
+    const from = startOfWeek(anchor);
+    return { from, to: addDays(from, 7) };
+  }
+  const gridStart = startOfWeek(new Date(anchor.getFullYear(), anchor.getMonth(), 1));
+  return { from: gridStart, to: addDays(gridStart, 42) };
+}
+
+/** 前へ / 次へ の移動量（日=±1日、週=±7日、月=±1ヶ月） */
+export function shiftAnchor(mode: CalendarMode, anchor: Date, direction: 1 | -1): Date {
+  if (mode === "day") return addDays(anchor, direction);
+  if (mode === "week") return addDays(anchor, direction * 7);
+  return new Date(anchor.getFullYear(), anchor.getMonth() + direction, 1);
+}
+
+/** ツールバーに表示する期間ラベル */
+export function calendarLabel(mode: CalendarMode, anchor: Date): string {
+  if (mode === "day") {
+    return `${anchor.getFullYear()}年${anchor.getMonth() + 1}月${anchor.getDate()}日（${DOW_LABELS[anchor.getDay()]}）`;
+  }
+  if (mode === "week") return weekRangeLabel(startOfWeek(anchor));
+  return `${anchor.getFullYear()}年${anchor.getMonth() + 1}月`;
+}
+
+/** 月表示・ミニカレンダー用の 6 週 × 7 日のグリッド（月初を含む週の月曜から42日） */
+export function buildMonthGrid(anchor: Date): Date[] {
+  const gridStart = startOfWeek(new Date(anchor.getFullYear(), anchor.getMonth(), 1));
+  return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+}
+
+/** "YYYY-MM-DD" 形式の日付キー */
+export function dateKey(d: Date): string {
+  return toLocalIso(startOfDay(d)).slice(0, 10);
 }

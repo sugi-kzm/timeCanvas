@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { Category, NewEntryInput, TimeEntry, ViewKind } from "../types";
-import { addDays, startOfWeek, toLocalIso } from "../lib/dates";
+import type { CalendarMode, Category, NewEntryInput, TimeEntry, ViewKind } from "../types";
+import { calendarRange, shiftAnchor, toLocalIso } from "../lib/dates";
 import * as categoryRepo from "../db/categoryRepo";
 import * as entryRepo from "../db/entryRepo";
 
@@ -26,7 +26,9 @@ export type EditorState =
 
 interface AppState {
   view: ViewKind;
-  weekStart: Date;
+  calendarMode: CalendarMode;
+  /** 表示の基準日。週表示は含まれる週、月表示は含まれる月を表示する */
+  anchorDate: Date;
   entries: TimeEntry[];
   categories: Category[];
   hiddenCategoryIds: readonly string[];
@@ -38,10 +40,13 @@ interface AppState {
 
   init: () => Promise<void>;
   setView: (view: ViewKind) => void;
-  setWeekStart: (date: Date) => Promise<void>;
+  setCalendarMode: (mode: CalendarMode) => Promise<void>;
+  setAnchorDate: (date: Date) => Promise<void>;
+  /** 月表示などから特定の日の「日表示」へ移動する */
+  showDay: (date: Date) => Promise<void>;
   goToday: () => Promise<void>;
-  goNextWeek: () => Promise<void>;
-  goPrevWeek: () => Promise<void>;
+  goNext: () => Promise<void>;
+  goPrev: () => Promise<void>;
   reloadEntries: () => Promise<void>;
 
   addEntry: (input: NewEntryInput) => Promise<void>;
@@ -62,17 +67,14 @@ interface AppState {
   setStatus: (message: string | null) => void;
 }
 
-function weekRange(weekStart: Date): { fromIso: string; toIso: string } {
-  return { fromIso: toLocalIso(weekStart), toIso: toLocalIso(addDays(weekStart, 7)) };
-}
-
 function sortByStart(entries: readonly TimeEntry[]): TimeEntry[] {
   return [...entries].sort((a, b) => a.startAt.localeCompare(b.startAt));
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
   view: "calendar",
-  weekStart: startOfWeek(new Date()),
+  calendarMode: "week",
+  anchorDate: new Date(),
   entries: [],
   categories: [],
   hiddenCategoryIds: [],
@@ -95,19 +97,31 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setView: (view) => set({ view }),
 
-  setWeekStart: async (date) => {
-    set({ weekStart: startOfWeek(date), selectedEntryId: null, quickCreate: null });
+  setCalendarMode: async (mode) => {
+    set({ calendarMode: mode, selectedEntryId: null, quickCreate: null });
     await get().reloadEntries();
   },
 
-  goToday: async () => get().setWeekStart(new Date()),
-  goNextWeek: async () => get().setWeekStart(addDays(get().weekStart, 7)),
-  goPrevWeek: async () => get().setWeekStart(addDays(get().weekStart, -7)),
+  setAnchorDate: async (date) => {
+    set({ anchorDate: date, selectedEntryId: null, quickCreate: null });
+    await get().reloadEntries();
+  },
+
+  showDay: async (date) => {
+    set({ calendarMode: "day", anchorDate: date, selectedEntryId: null, quickCreate: null });
+    await get().reloadEntries();
+  },
+
+  goToday: async () => get().setAnchorDate(new Date()),
+  goNext: async () =>
+    get().setAnchorDate(shiftAnchor(get().calendarMode, get().anchorDate, 1)),
+  goPrev: async () =>
+    get().setAnchorDate(shiftAnchor(get().calendarMode, get().anchorDate, -1)),
 
   reloadEntries: async () => {
     try {
-      const { fromIso, toIso } = weekRange(get().weekStart);
-      const entries = await entryRepo.listEntriesBetween(fromIso, toIso);
+      const { from, to } = calendarRange(get().calendarMode, get().anchorDate);
+      const entries = await entryRepo.listEntriesBetween(toLocalIso(from), toLocalIso(to));
       set({ entries });
     } catch (e) {
       set({ statusMessage: `記録の読み込みに失敗しました: ${String(e)}` });
