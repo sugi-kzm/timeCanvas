@@ -4,6 +4,43 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 
 const DB_URL: &str = "sqlite:timecanvas.db";
 
+#[cfg(target_os = "linux")]
+fn set_env_default(key: &str, value: &str) {
+    if std::env::var_os(key).is_none() {
+        std::env::set_var(key, value);
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn is_wsl() -> bool {
+    std::env::var_os("WSL_DISTRO_NAME").is_some()
+        || std::env::var_os("WSL_INTEROP").is_some()
+        || std::fs::read_to_string("/proc/sys/kernel/osrelease")
+            .map(|release| release.to_ascii_lowercase().contains("microsoft"))
+            .unwrap_or(false)
+}
+
+#[cfg(target_os = "linux")]
+fn apply_linux_webkit_workarounds() {
+    // 検証用: TIMECANVAS_WEBKIT_ENV=none で既定のワークアラウンドを全て無効化できる
+    if std::env::var("TIMECANVAS_WEBKIT_ENV").as_deref() == Ok("none") {
+        return;
+    }
+    if is_wsl() {
+        // WSLg can expose WebKitGTK without a usable DRM/DMABUF path, leaving a blank window.
+        set_env_default("GDK_BACKEND", "x11");
+        set_env_default("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        set_env_default("WEBKIT_DMABUF_RENDERER_DISABLE_GBM", "1");
+        set_env_default("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1");
+        set_env_default("WEBKIT_WEBGL_DISABLE_GBM", "1");
+        set_env_default("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+        set_env_default("WEBKIT_SKIA_ENABLE_CPU_RENDERING", "1");
+        set_env_default("WEBKIT_SKIA_GPU_PAINTING_THREADS", "0");
+        set_env_default("LIBGL_ALWAYS_SOFTWARE", "1");
+        set_env_default("GALLIUM_DRIVER", "llvmpipe");
+    }
+}
+
 fn migrations() -> Vec<Migration> {
     vec![Migration {
         version: 1,
@@ -40,6 +77,9 @@ fn migrations() -> Vec<Migration> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    apply_linux_webkit_workarounds();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())

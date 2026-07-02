@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useAppStore } from "./store/appStore";
 import { NavRail } from "./components/NavRail";
@@ -30,6 +31,7 @@ export default function App() {
   // 終了時バックアップと日次バックアップ（アプリ全体で一度だけ登録）
   useEffect(() => {
     if (lifecycleRegistered) return;
+    if (!isTauri()) return;
     lifecycleRegistered = true;
 
     const win = getCurrentWindow();

@@ -6,6 +6,9 @@
   --panel: #faf9f8;
   --border: #edebe9;
   --border-strong: #d2d0ce;
+  --grid-hour: #d8d6d4;
+  --grid-half: #d2d0ce;
+  --grid-quarter: #e8e6e4;
   --text: #252423;
   --text-2: #605e5c;
   --text-3: #a19f9d;
@@ -392,8 +395,8 @@ button {
 
 .week-scroll {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: auto;
+  background: var(--panel);
 }
 
 .week-header {
@@ -401,6 +404,8 @@ button {
   top: 0;
   z-index: 10;
   display: flex;
+  width: max-content;
+  min-width: 100%;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
@@ -408,10 +413,14 @@ button {
 .gutter-head {
   width: 52px;
   flex: none;
+  position: sticky;
+  left: 0;
+  z-index: 11;
+  background: var(--bg);
 }
 
 .day-head {
-  flex: 1;
+  flex: none;
   text-align: center;
   padding: 6px 0 4px;
   font-size: 13px;
@@ -421,6 +430,7 @@ button {
   align-items: baseline;
   justify-content: center;
   gap: 5px;
+  background: var(--bg);
 }
 
 .day-head-date {
@@ -436,11 +446,19 @@ button {
 
 .week-body {
   display: flex;
+  width: max-content;
+  min-width: 100%;
+  background: var(--bg);
 }
 
 .time-gutter {
   width: 52px;
   flex: none;
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
 }
 
 .hour-label {
@@ -452,7 +470,7 @@ button {
 }
 
 .day-columns {
-  flex: 1;
+  flex: none;
   display: flex;
   position: relative;
   cursor: default;
@@ -460,17 +478,32 @@ button {
 }
 
 .day-column {
-  flex: 1;
+  flex: none;
   position: relative;
   border-left: 1px solid var(--border);
+}
+
+.day-column:first-child {
+  border-left: none;
 }
 
 .day-column.today {
   background: #fcfdff;
 }
 
+/* 罫線: 正時=実線 / 30分=破線 / 15分・45分=細かい点線（Outlook 風） */
 .hour-cell {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--grid-hour);
+  background-image:
+    repeating-linear-gradient(to right, var(--grid-quarter) 0 2px, transparent 2px 6px),
+    repeating-linear-gradient(to right, var(--grid-half) 0 6px, transparent 6px 11px),
+    repeating-linear-gradient(to right, var(--grid-quarter) 0 2px, transparent 2px 6px);
+  background-size: 100% 1px;
+  background-position:
+    0 11px,
+    0 23px,
+    0 35px;
+  background-repeat: no-repeat;
 }
 
 /* ---------- エントリブロック ---------- */

@@ -16,7 +16,9 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: true,
-    host: host || false,
+    // localhost の IPv4/IPv6 解決の食い違いで WebView が接続できなくなるのを防ぐため
+    // 明示的に 127.0.0.1 にバインドする（devUrl も 127.0.0.1）
+    host: host || "127.0.0.1",
     hmr: host
       ? {
           protocol: "ws",

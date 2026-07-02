@@ -5,7 +5,7 @@
   "identifier": "com.timecanvas.app",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://127.0.0.1:1420",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
@@ -16,7 +16,8 @@
         "width": 1280,
         "height": 840,
         "minWidth": 960,
-        "minHeight": 600
+        "minHeight": 600,
+        "center": true
       }
     ],
     "security": {

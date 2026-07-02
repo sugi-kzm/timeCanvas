@@ -14,11 +14,14 @@ import {
   minutesOfDay,
   snapMinutes,
   snapMinutesFloor,
+  startOfDay,
 } from "../../lib/dates";
 import { layoutOverlaps, type Positioned } from "../../lib/layout";
 import { EntryBlock, type EntryDragMode } from "./EntryBlock";
 
+/** グリッドの寸法は固定（Outlook 同様、ウィンドウサイズに追従して伸縮しない） */
 export const HOUR_HEIGHT = 48;
+export const DAY_WIDTH = 150;
 const PX_PER_MIN = HOUR_HEIGHT / 60;
 const MIN_DURATION = 15;
 const CLICK_DEFAULT_DURATION = 30;
@@ -57,6 +60,8 @@ export function WeekView() {
   const categories = useAppStore((s) => s.categories);
   const hiddenIds = useAppStore((s) => s.hiddenCategoryIds);
   const selectedEntryId = useAppStore((s) => s.selectedEntryId);
+  const quickCreate = useAppStore((s) => s.quickCreate);
+  const editor = useAppStore((s) => s.editor);
   const selectEntry = useAppStore((s) => s.selectEntry);
   const openQuickCreate = useAppStore((s) => s.openQuickCreate);
   const openEditor = useAppStore((s) => s.openEditor);
@@ -110,8 +115,7 @@ export function WeekView() {
   const pointToDayMin = (clientX: number, clientY: number) => {
     const rect = columnsRef.current?.getBoundingClientRect();
     if (!rect) return { dayIndex: 0, minute: 0 };
-    const colWidth = rect.width / 7;
-    const dayIndex = Math.max(0, Math.min(6, Math.floor((clientX - rect.left) / colWidth)));
+    const dayIndex = Math.max(0, Math.min(6, Math.floor((clientX - rect.left) / DAY_WIDTH)));
     const minute = clampMinutes((clientY - rect.top) / PX_PER_MIN);
     return { dayIndex, minute };
   };
@@ -224,6 +228,23 @@ export function WeekView() {
   const draggedEntryId = drag !== null && drag.kind !== "create" ? drag.entry.id : null;
   const nowMin = minutesOfDay(now);
 
+  // ドラッグで選択した範囲を、クイック作成・詳細記入が完了するまで表示し続ける
+  const pendingSelection = useMemo(() => {
+    if (quickCreate !== null) {
+      return { day: quickCreate.day, startMin: quickCreate.startMin, endMin: quickCreate.endMin };
+    }
+    if (editor !== null && editor.mode === "create") {
+      const start = fromLocalIso(editor.startAt);
+      const startMin = minutesOfDay(start);
+      return {
+        day: startOfDay(start),
+        startMin,
+        endMin: startMin + Math.max(MIN_DURATION, durationMinutes(editor.startAt, editor.endAt)),
+      };
+    }
+    return null;
+  }, [quickCreate, editor]);
+
   return (
     <div className="week-view">
       <div className="week-scroll" ref={scrollRef}>
@@ -233,6 +254,7 @@ export function WeekView() {
             <div
               key={day.toDateString()}
               className={`day-head ${isSameDay(day, now) ? "today" : ""}`}
+              style={{ width: DAY_WIDTH }}
             >
               <span className="day-head-dow">{DOW_LABELS[day.getDay()]}</span>
               <span className="day-head-date">{day.getDate()}</span>
@@ -268,7 +290,11 @@ export function WeekView() {
                 isSameDay(fromLocalIso(drag.entry.startAt), day);
 
               return (
-                <div key={day.toDateString()} className={`day-column ${isToday ? "today" : ""}`}>
+                <div
+                  key={day.toDateString()}
+                  className={`day-column ${isToday ? "today" : ""}`}
+                  style={{ width: DAY_WIDTH }}
+                >
                   {HOURS.map((h) => (
                     <div key={h} className="hour-cell" style={{ height: HOUR_HEIGHT }} />
                   ))}
@@ -309,6 +335,24 @@ export function WeekView() {
                       </span>
                     </div>
                   )}
+                  {pendingSelection !== null &&
+                    drag === null &&
+                    isSameDay(pendingSelection.day, day) && (
+                      <div
+                        className="drag-ghost"
+                        style={{
+                          top: pendingSelection.startMin * PX_PER_MIN,
+                          height:
+                            (pendingSelection.endMin - pendingSelection.startMin) * PX_PER_MIN,
+                        }}
+                      >
+                        <span className="ghost-title">新しい記録</span>
+                        <span className="ghost-time">
+                          {formatMinutesHm(pendingSelection.startMin)} -{" "}
+                          {formatMinutesHm(pendingSelection.endMin)}
+                        </span>
+                      </div>
+                    )}
                   {isToday && (
                     <div className="now-line" style={{ top: nowMin * PX_PER_MIN }}>
                       <span className="now-dot" />
