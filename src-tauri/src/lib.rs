@@ -141,6 +141,14 @@ pub fn run() {
                 Ok(false) => {}
                 Err(e) => eprintln!("TimeCanvas: 復元の適用に失敗しました: {e}"),
             }
+            // WSLg 等でウィンドウが画面外・非表示のまま出てこない事象への防御。
+            // 表示・最小化解除・中央配置・フォーカスを明示的に要求する
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.center();
+                let _ = window.set_focus();
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
