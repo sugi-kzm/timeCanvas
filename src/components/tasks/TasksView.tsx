@@ -11,8 +11,47 @@ import {
   type TicketGroup,
 } from "../../lib/tickets";
 import { IconChevronRight } from "../icons";
+import { KanbanBoard } from "./KanbanBoard";
+import { GanttChart } from "./GanttChart";
+import type { TasksViewMode } from "../../store/appStore";
+
+const VIEW_TABS: { key: TasksViewMode; label: string }[] = [
+  { key: "list", label: "リスト" },
+  { key: "board", label: "カンバン" },
+  { key: "gantt", label: "ガント" },
+];
 
 export function TasksView() {
+  const viewMode = useAppStore((s) => s.tasksViewMode);
+  const setViewMode = useAppStore((s) => s.setTasksViewMode);
+
+  return (
+    <div className={`tasks-view ${viewMode !== "list" ? "wide" : ""}`}>
+      <div className="tasks-inner">
+        <div className="tasks-header-row">
+          <h2 className="tasks-heading">チケット</h2>
+          <div className="view-switch" role="group" aria-label="チケットの表示切替">
+            {VIEW_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                className={`seg ${viewMode === tab.key ? "active" : ""}`}
+                onClick={() => setViewMode(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {viewMode === "list" && <TicketList />}
+        {viewMode === "board" && <KanbanBoard />}
+        {viewMode === "gantt" && <GanttChart />}
+      </div>
+    </div>
+  );
+}
+
+function TicketList() {
   const tasks = useAppStore((s) => s.tasks);
   const categories = useAppStore((s) => s.categories);
   const addTask = useAppStore((s) => s.addTask);
@@ -30,9 +69,7 @@ export function TasksView() {
   };
 
   return (
-    <div className="tasks-view">
-      <div className="tasks-inner">
-        <h2 className="tasks-heading">チケット</h2>
+    <>
         <p className="tasks-lead">
           チケット = ゴールのある大きな作業単位。配下にタスクを追加して細分化できます。
           記録（実績）はタスク単位でもチケット全体でも紐付けられます。
@@ -86,8 +123,7 @@ export function TasksView() {
             <TicketBlock key={group.ticket.id} group={group} />
           ))}
         </ul>
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -302,12 +338,12 @@ function TaskRow({
         )}
       </span>
       <span className="task-actions">
-        {isTicket && task.status === "open" && (
+        {isTicket && task.status !== "done" && (
           <button type="button" className="btn small-btn" onClick={onAddChild} title="子タスクを追加">
             +タスク
           </button>
         )}
-        {task.status === "open" && (
+        {task.status !== "done" && (
           <button
             type="button"
             className="btn small-btn"

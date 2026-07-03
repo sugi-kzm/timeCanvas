@@ -50,7 +50,7 @@ export function EntryDialog() {
   const titleRef = useRef<HTMLInputElement>(null);
 
   // 選択肢: 未完了のチケット/タスク + 現在紐付いているもの（完了済みでも表示する）
-  const isSelectable = (t: Task) => t.status === "open" || t.id === taskId;
+  const isSelectable = (t: Task) => t.status !== "done" || t.id === taskId;
   const ticketGroups = useMemo(
     () =>
       groupTickets(tasks)

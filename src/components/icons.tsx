@@ -92,3 +92,28 @@ export function IconSearch({ size = 18 }: IconProps) {
     </svg>
   );
 }
+
+export function IconPlus({ size = 16 }: IconProps) {
+  return (
+    <svg {...iconAttrs(size)}>
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+export function IconDoc({ size = 16 }: IconProps) {
+  return (
+    <svg {...iconAttrs(size)}>
+      <path d="M6 3h8l4 4v14H6z" />
+      <path d="M14 3v4h4M9 12h6M9 16h6" />
+    </svg>
+  );
+}
+
+export function IconFolder({ size = 16 }: IconProps) {
+  return (
+    <svg {...iconAttrs(size)}>
+      <path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />
+    </svg>
+  );
+}

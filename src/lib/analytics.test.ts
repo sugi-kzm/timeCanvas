@@ -26,7 +26,7 @@ function makeEntry(id: string, startAt: string, endAt: string): TimeEntry {
 function makeTask(
   id: string,
   estimateMinutes: number | null,
-  status: "open" | "done" = "open",
+  status: Task["status"] = "todo",
   parentId: string | null = null,
   categoryId: string | null = null,
 ): Task {
@@ -37,6 +37,7 @@ function makeTask(
     categoryId,
     estimateMinutes,
     status,
+    startDate: null,
     dueDate: null,
     parentId,
     sortOrder: 0,
@@ -93,7 +94,7 @@ describe("compareEstimates / estimateAccuracy", () => {
   it("チケット単位で子タスクの見積・実績をロールアップする", () => {
     const tasks = [
       makeTask("t1", null), // チケット自身に見積なし
-      makeTask("c1", 60, "open", "t1"),
+      makeTask("c1", 60, "todo", "t1"),
       makeTask("c2", 60, "done", "t1"),
       makeTask("t2", null), // 見積なし → 除外
     ];
@@ -143,7 +144,7 @@ describe("categoryEstimateFactors", () => {
       makeTask("a", 60, "done", null, "dev"),
       makeTask("b", 120, "done", null, "dev"),
       makeTask("c", 60, "done", null, null), // 未分類
-      makeTask("d", 60, "open", null, "dev"), // 実績なし → 除外
+      makeTask("d", 60, "todo", null, "dev"), // 実績なし → 除外
     ];
     const actual = new Map([
       ["a", 90],

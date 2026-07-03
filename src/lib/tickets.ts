@@ -19,7 +19,9 @@ export function groupTickets(tasks: readonly Task[]): TicketGroup[] {
     childrenByParent.set(task.parentId, [...(childrenByParent.get(task.parentId) ?? []), task]);
   }
   const sorted = [...tickets].sort((a, b) => {
-    if (a.status !== b.status) return a.status === "open" ? -1 : 1;
+    const aDone = a.status === "done";
+    const bDone = b.status === "done";
+    if (aDone !== bDone) return aDone ? 1 : -1;
     return a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt);
   });
   return sorted.map((ticket) => ({

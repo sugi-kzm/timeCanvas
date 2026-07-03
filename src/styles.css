@@ -518,6 +518,14 @@ button {
   border-left: none;
 }
 
+.day-column:last-child {
+  border-right: 1px solid var(--border);
+}
+
+.day-head:last-child {
+  border-right: 1px solid var(--border);
+}
+
 .day-column.today {
   background: #fbfcfe;
 }
@@ -1663,9 +1671,33 @@ button {
   overflow-y: auto;
 }
 
-.notes-actions {
+.notes-section-label {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-3);
+  padding: 0 4px;
+}
+
+.ghost-icon-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.ghost-icon-btn:hover {
+  background: var(--hover);
+  color: var(--text);
 }
 
 .notes-search {
@@ -1680,9 +1712,10 @@ button {
 }
 
 .note-tree-row {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   width: 100%;
   border: none;
   background: transparent;
@@ -1703,14 +1736,41 @@ button {
 }
 
 .note-tree-row.dir {
-  color: var(--text-2);
+  color: var(--text);
+}
+
+.note-tree-icon {
+  display: inline-flex;
+  color: var(--text-3);
+  flex: none;
+}
+
+.note-tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Notion 風: アクティブ行は淡いグレー背景 + 左端の黒いバー */
+.note-tree-row.file.active {
+  background: var(--hover);
+  color: var(--text);
   font-weight: 600;
 }
 
-.note-tree-row.file.active {
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 600;
+.note-tree-row.file.active::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 5px;
+  bottom: 5px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--text);
+}
+
+.note-tree-row.file.active .note-tree-icon {
+  color: var(--text);
 }
 
 .tree-caret {
@@ -1894,6 +1954,344 @@ button {
 
 .md-preview a {
   color: var(--accent);
+}
+
+/* ---------- チケット: ビュー切替 / カンバン / ガント ---------- */
+
+.tasks-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.tasks-header-row .tasks-heading {
+  margin: 0;
+}
+
+.tasks-view.wide .tasks-inner {
+  max-width: none;
+}
+
+.kanban {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: 12px;
+}
+
+.kanban-column {
+  width: 270px;
+  flex: none;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 120px;
+}
+
+.kanban-column.drag-over {
+  outline: 2px dashed var(--border-strong);
+  outline-offset: -2px;
+}
+
+.kanban-column-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kanban-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.65);
+  border-radius: 10px;
+  padding: 2px 10px;
+}
+
+.kanban-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.kanban-count {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.kanban-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kanban-card {
+  background: var(--bg);
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px rgba(15, 15, 15, 0.04),
+    0 1px 3px rgba(15, 15, 15, 0.08);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: grab;
+}
+
+.kanban-card:active {
+  cursor: grabbing;
+}
+
+.kanban-card-parent {
+  font-size: 11px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kanban-card-title {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.kanban-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.kanban-card-hours {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.kanban-card-record {
+  align-self: flex-end;
+  font-size: 11px;
+  padding: 0;
+}
+
+.kanban-add-input {
+  font-size: 12px;
+}
+
+.kanban-add-btn {
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.kanban-add-btn:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+/* ---------- ガントチャート ---------- */
+
+.gantt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gantt-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.gantt-header-row,
+.gantt-row {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.gantt-left {
+  width: 380px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 10px;
+  border-right: 1px solid var(--border);
+  position: sticky;
+  left: 0;
+  background: var(--bg);
+  z-index: 2;
+}
+
+.gantt-left-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.gantt-left-dates {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 28px;
+}
+
+.gantt-left-dates.child {
+  padding-left: 32px;
+}
+
+.gantt-derived-note {
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+.gantt-left-head {
+  flex-direction: row;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  min-height: 34px;
+}
+
+.gantt-row.ticket .gantt-left {
+  background: var(--panel);
+}
+
+.gantt-row.ticket {
+  background: var(--panel);
+}
+
+.gantt-cat-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.gantt-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gantt-title.done {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.gantt-status-chip {
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 1px 8px;
+  letter-spacing: 0.02em;
+}
+
+.gantt-date-input {
+  flex: none;
+  width: 112px;
+  font-family: inherit;
+  font-size: 10.5px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 1px 2px;
+  color: var(--text-2);
+  background: transparent;
+}
+
+.gantt-date-input.empty {
+  color: var(--text-3);
+  opacity: 0.55;
+}
+
+.gantt-date-input:hover,
+.gantt-date-input:focus {
+  border-color: var(--border-strong);
+  background: var(--bg);
+  outline: none;
+}
+
+.gantt-date-sep {
+  font-size: 10px;
+  color: var(--text-3);
+  flex: none;
+}
+
+.gantt-timeline {
+  position: relative;
+  flex: none;
+  min-height: 52px;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--border) 0 1px,
+    transparent 1px 42px
+  );
+}
+
+.gantt-header-row .gantt-timeline {
+  background: var(--panel);
+}
+
+.gantt-month {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  border-left: 1px solid var(--border-strong);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.gantt-bar {
+  position: absolute;
+  top: 17px;
+  height: 18px;
+  border-radius: 9px;
+  opacity: 0.9;
+}
+
+.gantt-bar.derived {
+  opacity: 0.35;
+}
+
+.gantt-today-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--danger);
+  opacity: 0.7;
+  z-index: 1;
+}
+
+.gantt-hint {
+  font-size: 11px;
+  color: var(--text-3);
+  margin: 0;
 }
 
 /* ---------- 幅の上書き ----------

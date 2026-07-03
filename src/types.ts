@@ -30,7 +30,7 @@ export interface NewEntryInput {
   taskId?: string | null;
 }
 
-export type TaskStatus = "open" | "done";
+export type TaskStatus = "todo" | "in_progress" | "review" | "done";
 
 /**
  * チケットとタスクの両方を表す。
@@ -45,6 +45,8 @@ export interface Task {
   /** 見積時間（分）。未設定は null */
   estimateMinutes: number | null;
   status: TaskStatus;
+  /** ガント用の開始日 "YYYY-MM-DD"。未設定は null */
+  startDate: string | null;
   /** "YYYY-MM-DD" 形式の期限。未設定は null */
   dueDate: string | null;
   /** 親チケットの id。チケット自身は null */

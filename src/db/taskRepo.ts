@@ -1,5 +1,6 @@
-import type { Task, TaskStatus } from "../types";
+import type { Task } from "../types";
 import { toLocalIso } from "../lib/dates";
+import { normalizeStatus } from "../lib/status";
 import { getDb } from "./database";
 
 interface TaskRow {
@@ -11,6 +12,7 @@ interface TaskRow {
   status: string;
   due_date: string | null;
   parent_id: string | null;
+  start_date: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -24,7 +26,8 @@ function rowToTask(row: TaskRow): Task {
     memo: row.memo,
     categoryId: row.category_id,
     estimateMinutes: row.estimate_minutes,
-    status: (row.status === "done" ? "done" : "open") as TaskStatus,
+    status: normalizeStatus(row.status),
+    startDate: row.start_date,
     dueDate: row.due_date,
     parentId: row.parent_id,
     sortOrder: row.sort_order,
@@ -39,7 +42,7 @@ export async function listTasks(): Promise<Task[]> {
   const db = await getDb();
   const rows = await db.select<TaskRow[]>(
     `SELECT * FROM tasks
-     WHERE status = 'open'
+     WHERE status != 'done'
      ORDER BY sort_order, created_at`,
   );
   const doneRows = await db.select<TaskRow[]>(
@@ -67,7 +70,8 @@ export async function createTask(
     memo: "",
     categoryId,
     estimateMinutes: null,
-    status: "open",
+    status: "todo",
+    startDate: null,
     dueDate: null,
     parentId,
     sortOrder: (maxRows[0]?.max_order ?? -1) + 1,
@@ -76,8 +80,8 @@ export async function createTask(
     completedAt: null,
   };
   await db.execute(
-    `INSERT INTO tasks (id, title, memo, category_id, estimate_minutes, status, due_date, parent_id, sort_order, created_at, updated_at, completed_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+    `INSERT INTO tasks (id, title, memo, category_id, estimate_minutes, status, due_date, parent_id, start_date, sort_order, created_at, updated_at, completed_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
     [
       task.id,
       task.title,
@@ -87,6 +91,7 @@ export async function createTask(
       task.status,
       task.dueDate,
       task.parentId,
+      task.startDate,
       task.sortOrder,
       task.createdAt,
       task.updatedAt,
@@ -102,9 +107,9 @@ export async function updateTask(task: Task): Promise<Task> {
   await db.execute(
     `UPDATE tasks
      SET title = $1, memo = $2, category_id = $3, estimate_minutes = $4,
-         status = $5, due_date = $6, parent_id = $7, sort_order = $8,
-         updated_at = $9, completed_at = $10
-     WHERE id = $11`,
+         status = $5, due_date = $6, parent_id = $7, start_date = $8, sort_order = $9,
+         updated_at = $10, completed_at = $11
+     WHERE id = $12`,
     [
       updated.title,
       updated.memo,
@@ -113,6 +118,7 @@ export async function updateTask(task: Task): Promise<Task> {
       updated.status,
       updated.dueDate,
       updated.parentId,
+      updated.startDate,
       updated.sortOrder,
       updated.updatedAt,
       updated.completedAt,
@@ -146,4 +152,24 @@ export async function actualMinutesByTask(): Promise<Map<string, number>> {
      GROUP BY task_id`,
   );
   return new Map(rows.map((r) => [r.task_id, r.minutes]));
+}
+
+export interface EntryDateRange {
+  /** "YYYY-MM-DD" */
+  from: string;
+  to: string;
+}
+
+/** タスクごとの実績の期間（最初の記録日〜最後の記録日）。ガントの期間未設定時に使う */
+export async function entryDateRangesByTask(): Promise<Map<string, EntryDateRange>> {
+  const db = await getDb();
+  const rows = await db.select<{ task_id: string; min_start: string; max_end: string }[]>(
+    `SELECT task_id, MIN(start_at) AS min_start, MAX(end_at) AS max_end
+     FROM time_entries
+     WHERE task_id IS NOT NULL
+     GROUP BY task_id`,
+  );
+  return new Map(
+    rows.map((r) => [r.task_id, { from: r.min_start.slice(0, 10), to: r.max_end.slice(0, 10) }]),
+  );
 }

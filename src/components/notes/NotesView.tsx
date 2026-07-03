@@ -15,7 +15,7 @@ import {
   type NoteNode,
   type NoteSearchHit,
 } from "../../db/notesService";
-import { IconChevronRight, IconClose } from "../icons";
+import { IconChevronRight, IconClose, IconDoc, IconFolder, IconPlus } from "../icons";
 
 const AUTOSAVE_DELAY_MS = 800;
 
@@ -229,7 +229,10 @@ export function NotesView() {
                 <span className={`tree-caret ${expanded.has(node.path) ? "open" : ""}`}>
                   <IconChevronRight size={12} />
                 </span>
-                {node.name}
+                <span className="note-tree-icon">
+                  <IconFolder size={14} />
+                </span>
+                <span className="note-tree-name">{node.name}</span>
               </button>
               {expanded.has(node.path) && renderNodes(node.children, depth + 1)}
             </>
@@ -239,7 +242,10 @@ export function NotesView() {
               className={`note-tree-row file ${node.path === selectedPath ? "active" : ""}`}
               onClick={() => void openNote(node.path)}
             >
-              {displayName(node.name)}
+              <span className="note-tree-icon">
+                <IconDoc size={14} />
+              </span>
+              <span className="note-tree-name">{displayName(node.name)}</span>
             </button>
           )}
         </li>
@@ -250,12 +256,26 @@ export function NotesView() {
   return (
     <div className="notes-view">
       <aside className="notes-sidebar">
-        <div className="notes-actions">
-          <button type="button" className="btn" onClick={() => void createNote()}>
-            + ノート
+        <div className="notes-section-label">
+          <span>ノート</span>
+          <span className="spacer" />
+          <button
+            type="button"
+            className="ghost-icon-btn"
+            title="新しいノート"
+            aria-label="新しいノート"
+            onClick={() => void createNote()}
+          >
+            <IconPlus size={14} />
           </button>
-          <button type="button" className="btn" onClick={() => void createFolder()}>
-            + フォルダ
+          <button
+            type="button"
+            className="ghost-icon-btn"
+            title="新しいフォルダ"
+            aria-label="新しいフォルダ"
+            onClick={() => void createFolder()}
+          >
+            <IconFolder size={14} />
           </button>
         </div>
         <input

@@ -4,6 +4,7 @@ import type {
   Category,
   NewEntryInput,
   Task,
+  TaskStatus,
   TimeEntry,
   ViewKind,
 } from "../types";
@@ -33,6 +34,8 @@ export type EditorState =
     }
   | { mode: "edit"; entry: TimeEntry };
 
+export type TasksViewMode = "list" | "board" | "gantt";
+
 interface AppState {
   view: ViewKind;
   calendarMode: CalendarMode;
@@ -43,6 +46,10 @@ interface AppState {
   tasks: Task[];
   /** タスクID → 実績合計（分） */
   taskActualMinutes: ReadonlyMap<string, number>;
+  /** タスクID → 実績の期間（開始日〜最終日）。ガントで日付未設定時の表示に使う */
+  taskEntryRanges: ReadonlyMap<string, taskRepo.EntryDateRange>;
+  /** チケット画面の表示モード（リスト / カンバン / ガント） */
+  tasksViewMode: TasksViewMode;
   hiddenCategoryIds: readonly string[];
   selectedEntryId: string | null;
   quickCreate: QuickCreateState | null;
@@ -81,7 +88,9 @@ interface AppState {
   ) => Promise<void>;
   updateTask: (task: Task) => Promise<void>;
   toggleTaskDone: (task: Task) => Promise<void>;
+  moveTaskStatus: (task: Task, status: TaskStatus) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
+  setTasksViewMode: (mode: TasksViewMode) => void;
 
   setSearchKeyword: (keyword: string) => void;
   setSearchBoxOpen: (open: boolean) => void;
@@ -109,6 +118,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   categories: [],
   tasks: [],
   taskActualMinutes: new Map(),
+  taskEntryRanges: new Map(),
+  tasksViewMode: "list",
   hiddenCategoryIds: [],
   selectedEntryId: null,
   quickCreate: null,
@@ -237,11 +248,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   loadTasks: async () => {
     try {
-      const [tasks, taskActualMinutes] = await Promise.all([
+      const [tasks, taskActualMinutes, taskEntryRanges] = await Promise.all([
         taskRepo.listTasks(),
         taskRepo.actualMinutesByTask(),
+        taskRepo.entryDateRangesByTask(),
       ]);
-      set({ tasks, taskActualMinutes });
+      set({ tasks, taskActualMinutes, taskEntryRanges });
     } catch (e) {
       set({ statusMessage: `タスクの読み込みに失敗しました: ${String(e)}` });
     }
@@ -267,10 +279,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   toggleTaskDone: async (task) => {
     const done = task.status !== "done";
+    await get().moveTaskStatus(task, done ? "done" : "todo");
+  },
+
+  moveTaskStatus: async (task, status) => {
+    if (task.status === status) return;
     await get().updateTask({
       ...task,
-      status: done ? "done" : "open",
-      completedAt: done ? toLocalIso(new Date()) : null,
+      status,
+      completedAt: status === "done" ? toLocalIso(new Date()) : null,
     });
   },
 
@@ -283,6 +300,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ statusMessage: `タスクの削除に失敗しました: ${String(e)}` });
     }
   },
+
+  setTasksViewMode: (mode) => set({ tasksViewMode: mode }),
 
   setSearchKeyword: (keyword) => set({ searchKeyword: keyword }),
   setSearchBoxOpen: (open) => set({ searchBoxOpen: open }),

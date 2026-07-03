@@ -106,6 +106,15 @@ fn migrations() -> Vec<Migration> {
         ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "add_task_status_and_dates",
+            sql: "
+            UPDATE tasks SET status = 'todo' WHERE status = 'open';
+            ALTER TABLE tasks ADD COLUMN start_date TEXT;
+        ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
