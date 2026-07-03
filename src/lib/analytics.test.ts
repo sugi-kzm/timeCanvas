@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   buildYearHeatmap,
+  categoryEstimateFactors,
   compareEstimates,
   estimateAccuracy,
   heatmapLevel,
   minutesByDay,
 } from "./analytics";
-import type { Task, TimeEntry } from "../types";
+import type { Category, Task, TimeEntry } from "../types";
 
 function makeEntry(id: string, startAt: string, endAt: string): TimeEntry {
   return {
@@ -22,15 +23,22 @@ function makeEntry(id: string, startAt: string, endAt: string): TimeEntry {
   };
 }
 
-function makeTask(id: string, estimateMinutes: number | null, status: "open" | "done" = "open"): Task {
+function makeTask(
+  id: string,
+  estimateMinutes: number | null,
+  status: "open" | "done" = "open",
+  parentId: string | null = null,
+  categoryId: string | null = null,
+): Task {
   return {
     id,
     title: `task-${id}`,
     memo: "",
-    categoryId: null,
+    categoryId,
     estimateMinutes,
     status,
     dueDate: null,
+    parentId,
     sortOrder: 0,
     createdAt: "2026-01-01T00:00:00",
     updatedAt: `2026-01-0${id.length}T00:00:00`,
@@ -82,22 +90,33 @@ describe("buildYearHeatmap", () => {
 });
 
 describe("compareEstimates / estimateAccuracy", () => {
-  it("見積のあるタスクだけを対象にし、実績と比を計算する", () => {
-    const tasks = [makeTask("a", 120), makeTask("bb", null), makeTask("ccc", 60, "done")];
+  it("チケット単位で子タスクの見積・実績をロールアップする", () => {
+    const tasks = [
+      makeTask("t1", null), // チケット自身に見積なし
+      makeTask("c1", 60, "open", "t1"),
+      makeTask("c2", 60, "done", "t1"),
+      makeTask("t2", null), // 見積なし → 除外
+    ];
     const actual = new Map([
-      ["a", 90],
-      ["ccc", 90],
+      ["t1", 30], // チケット直接の実績
+      ["c1", 60],
+      ["c2", 90],
     ]);
     const comparisons = compareEstimates(tasks, actual);
-    expect(comparisons).toHaveLength(2);
-    expect(comparisons[0].task.id).toBe("a"); // open が先
-    expect(comparisons[0].ratio).toBeCloseTo(0.75);
-    expect(comparisons[1].ratio).toBeCloseTo(1.5);
+    expect(comparisons).toHaveLength(1);
+    expect(comparisons[0].task.id).toBe("t1");
+    expect(comparisons[0].isTicket).toBe(true);
+    expect(comparisons[0].estimateMinutes).toBe(120);
+    expect(comparisons[0].actualMinutes).toBe(180);
+    expect(comparisons[0].ratio).toBeCloseTo(1.5);
+  });
 
+  it("estimateAccuracy は実績のある項目だけで全体比を出す", () => {
+    const tasks = [makeTask("a", 120), makeTask("b", 60)];
+    const comparisons = compareEstimates(tasks, new Map([["a", 120]]));
     const accuracy = estimateAccuracy(comparisons);
-    expect(accuracy.taskCount).toBe(2);
-    expect(accuracy.totalEstimate).toBe(180);
-    expect(accuracy.totalActual).toBe(180);
+    expect(accuracy.taskCount).toBe(1);
+    expect(accuracy.totalEstimate).toBe(120);
     expect(accuracy.overallRatio).toBeCloseTo(1.0);
   });
 
@@ -106,5 +125,41 @@ describe("compareEstimates / estimateAccuracy", () => {
     const accuracy = estimateAccuracy(comparisons);
     expect(accuracy.taskCount).toBe(0);
     expect(accuracy.overallRatio).toBeNull();
+  });
+});
+
+describe("categoryEstimateFactors", () => {
+  const dev: Category = {
+    id: "dev",
+    name: "開発",
+    color: "#2564CF",
+    archived: false,
+    sortOrder: 0,
+    createdAt: "2026-01-01T00:00:00",
+  };
+
+  it("カテゴリごとに 実績合計/見積合計 の係数を出す", () => {
+    const tasks = [
+      makeTask("a", 60, "done", null, "dev"),
+      makeTask("b", 120, "done", null, "dev"),
+      makeTask("c", 60, "done", null, null), // 未分類
+      makeTask("d", 60, "open", null, "dev"), // 実績なし → 除外
+    ];
+    const actual = new Map([
+      ["a", 90],
+      ["b", 180],
+      ["c", 30],
+    ]);
+    const factors = categoryEstimateFactors(tasks, actual, [dev]);
+    expect(factors).toHaveLength(2);
+    const devFactor = factors.find((f) => f.categoryId === "dev");
+    expect(devFactor?.factor).toBeCloseTo(1.5); // (90+180)/(60+120)
+    expect(devFactor?.itemCount).toBe(2);
+    const none = factors.find((f) => f.categoryId === null);
+    expect(none?.factor).toBeCloseTo(0.5);
+  });
+
+  it("対象がなければ空配列", () => {
+    expect(categoryEstimateFactors([], new Map(), [dev])).toEqual([]);
   });
 });

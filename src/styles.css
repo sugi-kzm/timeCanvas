@@ -780,6 +780,85 @@ button {
   margin: 24px 0 6px;
 }
 
+.tasks-lead {
+  font-size: 12px;
+  color: var(--text-3);
+  margin: -8px 0 16px;
+  line-height: 1.6;
+}
+
+.ticket-block {
+  border-bottom: 1px solid var(--border);
+}
+
+.task-row.ticket {
+  background: var(--panel);
+  border-bottom: none;
+  border-radius: 6px;
+  margin-top: 6px;
+}
+
+.ticket-title {
+  font-weight: 600;
+}
+
+.ticket-progress {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+
+.task-children {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 6px;
+}
+
+.task-row.child {
+  border-bottom: none;
+  padding-left: 8px;
+}
+
+.child-indent {
+  width: 26px;
+  flex: none;
+}
+
+.tree-caret-btn {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: none;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-2);
+  border-radius: 4px;
+}
+
+.tree-caret-btn:hover {
+  background: var(--hover);
+}
+
+.tree-caret-btn.hidden {
+  visibility: hidden;
+}
+
+.task-child-add {
+  padding: 4px 8px 4px 64px;
+}
+
+.small-btn {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
 .task-add-row {
   display: flex;
   gap: 8px;
@@ -821,7 +900,7 @@ button {
 }
 
 .tlh-actions {
-  width: 110px;
+  width: 190px;
   flex: none;
 }
 
@@ -939,14 +1018,23 @@ button {
 }
 
 .task-actions {
-  width: 110px;
+  width: 190px;
   flex: none;
   display: flex;
   gap: 6px;
   justify-content: flex-end;
 }
 
+.task-actions .btn {
+  white-space: nowrap;
+}
+
 /* ---------- 検索 ---------- */
+
+.search-area {
+  display: flex;
+  align-items: center;
+}
 
 .search-box {
   width: 220px;
@@ -1252,6 +1340,49 @@ button {
 
 .over-text {
   color: var(--danger);
+}
+
+.factor-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.factor-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.factor-name {
+  width: 110px;
+  flex: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.factor-value {
+  width: 70px;
+  flex: none;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.factor-count {
+  width: 50px;
+  flex: none;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.factor-hint {
+  font-size: 12px;
+  color: var(--text-2);
 }
 
 .heatmap-scroll {

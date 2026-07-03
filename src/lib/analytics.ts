@@ -1,5 +1,7 @@
-import type { Task, TimeEntry } from "../types";
+import type { Category, Task, TimeEntry } from "../types";
 import { addDays, dateKey, durationMinutes, startOfWeek } from "./dates";
+import { UNCATEGORIZED_COLOR, UNCATEGORIZED_LABEL } from "./summary";
+import { groupTickets, rollupActualMinutes, rollupEstimateMinutes } from "./tickets";
 
 /** 日付キー（YYYY-MM-DD）ごとの記録分数を集計する */
 export function minutesByDay(entries: readonly TimeEntry[]): Map<string, number> {
@@ -67,29 +69,80 @@ export interface EstimateComparison {
   actualMinutes: number;
   /** 実績 / 見積。見積 0 のときは null */
   ratio: number | null;
+  /** チケット（親）の行かどうか */
+  isTicket: boolean;
 }
 
-/** 見積が設定されているタスクの見積 vs 実績の一覧（未完了→完了、更新が新しい順） */
+/**
+ * チケット単位の見積 vs 実績（子タスクをロールアップ）。
+ * 見積がどこにも設定されていないチケットは除外する。
+ */
 export function compareEstimates(
   tasks: readonly Task[],
   actualByTask: ReadonlyMap<string, number>,
 ): EstimateComparison[] {
-  return tasks
-    .filter((t) => t.estimateMinutes !== null && t.estimateMinutes > 0)
-    .map((task) => {
-      const estimateMinutes = task.estimateMinutes ?? 0;
-      const actualMinutes = actualByTask.get(task.id) ?? 0;
+  return groupTickets(tasks)
+    .map((group) => {
+      const estimateMinutes = rollupEstimateMinutes(group);
       return {
-        task,
-        estimateMinutes,
-        actualMinutes,
-        ratio: estimateMinutes > 0 ? actualMinutes / estimateMinutes : null,
+        task: group.ticket,
+        estimateMinutes: estimateMinutes ?? 0,
+        actualMinutes: rollupActualMinutes(group, actualByTask),
+        ratio:
+          estimateMinutes !== null && estimateMinutes > 0
+            ? rollupActualMinutes(group, actualByTask) / estimateMinutes
+            : null,
+        isTicket: true,
       };
     })
-    .sort((a, b) => {
-      if (a.task.status !== b.task.status) return a.task.status === "open" ? -1 : 1;
-      return b.task.updatedAt.localeCompare(a.task.updatedAt);
+    .filter((c) => c.estimateMinutes > 0);
+}
+
+export interface CategoryEstimateFactor {
+  categoryId: string | null;
+  name: string;
+  color: string;
+  /** 実績合計 / 見積合計。1.0 = 見積どおり、1.5 = 見積の 1.5 倍かかる傾向 */
+  factor: number;
+  itemCount: number;
+}
+
+/**
+ * カテゴリ別の「見積補正係数」。
+ * 見積と実績の両方があるチケット/タスク単体（ロールアップではなく自身の値）を集計する。
+ * 新しい見積にこの係数を掛けると、過去の傾向を踏まえた予想時間になる。
+ */
+export function categoryEstimateFactors(
+  tasks: readonly Task[],
+  actualByTask: ReadonlyMap<string, number>,
+  categories: readonly Category[],
+): CategoryEstimateFactor[] {
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const sums = new Map<string | null, { estimate: number; actual: number; count: number }>();
+  for (const task of tasks) {
+    const estimate = task.estimateMinutes;
+    const actual = actualByTask.get(task.id) ?? 0;
+    if (estimate === null || estimate <= 0 || actual <= 0) continue;
+    const key = task.categoryId !== null && byId.has(task.categoryId) ? task.categoryId : null;
+    const current = sums.get(key) ?? { estimate: 0, actual: 0, count: 0 };
+    sums.set(key, {
+      estimate: current.estimate + estimate,
+      actual: current.actual + actual,
+      count: current.count + 1,
     });
+  }
+  return [...sums.entries()]
+    .map(([categoryId, s]) => {
+      const category = categoryId !== null ? byId.get(categoryId) : undefined;
+      return {
+        categoryId,
+        name: category?.name ?? UNCATEGORIZED_LABEL,
+        color: category?.color ?? UNCATEGORIZED_COLOR,
+        factor: s.actual / s.estimate,
+        itemCount: s.count,
+      };
+    })
+    .sort((a, b) => b.itemCount - a.itemCount);
 }
 
 export interface EstimateAccuracy {

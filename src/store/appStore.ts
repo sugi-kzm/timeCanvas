@@ -50,6 +50,8 @@ interface AppState {
   settingsOpen: boolean;
   statusMessage: string | null;
   searchKeyword: string;
+  /** ツールバーの検索ボックスが展開されているか */
+  searchBoxOpen: boolean;
 
   init: () => Promise<void>;
   setView: (view: ViewKind) => void;
@@ -72,12 +74,17 @@ interface AppState {
   toggleCategoryHidden: (id: string) => void;
 
   loadTasks: () => Promise<void>;
-  addTask: (title: string, categoryId: string | null) => Promise<void>;
+  addTask: (
+    title: string,
+    categoryId: string | null,
+    parentId?: string | null,
+  ) => Promise<void>;
   updateTask: (task: Task) => Promise<void>;
   toggleTaskDone: (task: Task) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
 
   setSearchKeyword: (keyword: string) => void;
+  setSearchBoxOpen: (open: boolean) => void;
   /** 検索結果などから該当エントリの週へ移動して選択する */
   jumpToEntry: (entry: TimeEntry) => Promise<void>;
 
@@ -109,6 +116,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   settingsOpen: false,
   statusMessage: null,
   searchKeyword: "",
+  searchBoxOpen: false,
 
   init: async () => {
     try {
@@ -239,12 +247,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  addTask: async (title, categoryId) => {
+  addTask: async (title, categoryId, parentId = null) => {
     try {
-      const created = await taskRepo.createTask(title, categoryId);
+      const created = await taskRepo.createTask(title, categoryId, parentId);
       set((s) => ({ tasks: [...s.tasks, created] }));
     } catch (e) {
-      set({ statusMessage: `タスクの作成に失敗しました: ${String(e)}` });
+      set({ statusMessage: `作成に失敗しました: ${String(e)}` });
     }
   },
 
@@ -277,6 +285,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setSearchKeyword: (keyword) => set({ searchKeyword: keyword }),
+  setSearchBoxOpen: (open) => set({ searchBoxOpen: open }),
 
   jumpToEntry: async (entry) => {
     set({

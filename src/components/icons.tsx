@@ -83,3 +83,12 @@ export function IconClose({ size = 18 }: IconProps) {
     </svg>
   );
 }
+
+export function IconSearch({ size = 18 }: IconProps) {
+  return (
+    <svg {...iconAttrs(size)}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20.5 20.5L16 16" />
+    </svg>
+  );
+}

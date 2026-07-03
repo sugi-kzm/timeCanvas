@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "../../store/appStore";
+import type { Task } from "../../types";
+import { groupTickets } from "../../lib/tickets";
 
 function timePart(iso: string): string {
   return iso.slice(11, 16);
@@ -47,8 +49,16 @@ export function EntryDialog() {
   const [error, setError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
-  // 選択肢: 未完了タスク + 現在紐付いているタスク（完了済みでも表示する）
-  const selectableTasks = tasks.filter((t) => t.status === "open" || t.id === taskId);
+  // 選択肢: 未完了のチケット/タスク + 現在紐付いているもの（完了済みでも表示する）
+  const isSelectable = (t: Task) => t.status === "open" || t.id === taskId;
+  const ticketGroups = useMemo(
+    () =>
+      groupTickets(tasks)
+        .map(({ ticket, children }) => ({ ticket, children: children.filter(isSelectable) }))
+        .filter(({ ticket, children }) => isSelectable(ticket) || children.length > 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tasks, taskId],
+  );
 
   useEffect(() => {
     titleRef.current?.focus();
@@ -159,19 +169,26 @@ export function EntryDialog() {
             />
           </label>
         </div>
-        {selectableTasks.length > 0 && (
+        {ticketGroups.length > 0 && (
           <label className="field">
-            <span className="field-label">タスク（見積と実績を紐付け）</span>
+            <span className="field-label">チケット / タスク（見積と実績を紐付け）</span>
             <select
               className="select-input"
               value={taskId ?? ""}
               onChange={(e) => setTaskId(e.target.value === "" ? null : e.target.value)}
             >
               <option value="">なし</option>
-              {selectableTasks.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.title}
-                </option>
+              {ticketGroups.map(({ ticket, children }) => (
+                <optgroup key={ticket.id} label={ticket.title}>
+                  {isSelectable(ticket) && (
+                    <option value={ticket.id}>{ticket.title}（チケット全体）</option>
+                  )}
+                  {children.map((child) => (
+                    <option key={child.id} value={child.id}>
+                      {child.title}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </label>

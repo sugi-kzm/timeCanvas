@@ -10,6 +10,7 @@ interface TaskRow {
   estimate_minutes: number | null;
   status: string;
   due_date: string | null;
+  parent_id: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -25,6 +26,7 @@ function rowToTask(row: TaskRow): Task {
     estimateMinutes: row.estimate_minutes,
     status: (row.status === "done" ? "done" : "open") as TaskStatus,
     dueDate: row.due_date,
+    parentId: row.parent_id,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -32,7 +34,7 @@ function rowToTask(row: TaskRow): Task {
   };
 }
 
-/** 未完了すべてと、完了済みの直近 30 件を返す */
+/** 未完了すべてと、完了済みの直近 100 件を返す（チケット・タスク混在） */
 export async function listTasks(): Promise<Task[]> {
   const db = await getDb();
   const rows = await db.select<TaskRow[]>(
@@ -44,12 +46,16 @@ export async function listTasks(): Promise<Task[]> {
     `SELECT * FROM tasks
      WHERE status = 'done'
      ORDER BY completed_at DESC
-     LIMIT 30`,
+     LIMIT 100`,
   );
   return [...rows, ...doneRows].map(rowToTask);
 }
 
-export async function createTask(title: string, categoryId: string | null): Promise<Task> {
+export async function createTask(
+  title: string,
+  categoryId: string | null,
+  parentId: string | null = null,
+): Promise<Task> {
   const db = await getDb();
   const now = toLocalIso(new Date());
   const maxRows = await db.select<{ max_order: number | null }[]>(
@@ -63,14 +69,15 @@ export async function createTask(title: string, categoryId: string | null): Prom
     estimateMinutes: null,
     status: "open",
     dueDate: null,
+    parentId,
     sortOrder: (maxRows[0]?.max_order ?? -1) + 1,
     createdAt: now,
     updatedAt: now,
     completedAt: null,
   };
   await db.execute(
-    `INSERT INTO tasks (id, title, memo, category_id, estimate_minutes, status, due_date, sort_order, created_at, updated_at, completed_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+    `INSERT INTO tasks (id, title, memo, category_id, estimate_minutes, status, due_date, parent_id, sort_order, created_at, updated_at, completed_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
     [
       task.id,
       task.title,
@@ -79,6 +86,7 @@ export async function createTask(title: string, categoryId: string | null): Prom
       task.estimateMinutes,
       task.status,
       task.dueDate,
+      task.parentId,
       task.sortOrder,
       task.createdAt,
       task.updatedAt,
@@ -94,8 +102,9 @@ export async function updateTask(task: Task): Promise<Task> {
   await db.execute(
     `UPDATE tasks
      SET title = $1, memo = $2, category_id = $3, estimate_minutes = $4,
-         status = $5, due_date = $6, sort_order = $7, updated_at = $8, completed_at = $9
-     WHERE id = $10`,
+         status = $5, due_date = $6, parent_id = $7, sort_order = $8,
+         updated_at = $9, completed_at = $10
+     WHERE id = $11`,
     [
       updated.title,
       updated.memo,
@@ -103,6 +112,7 @@ export async function updateTask(task: Task): Promise<Task> {
       updated.estimateMinutes,
       updated.status,
       updated.dueDate,
+      updated.parentId,
       updated.sortOrder,
       updated.updatedAt,
       updated.completedAt,
@@ -112,10 +122,17 @@ export async function updateTask(task: Task): Promise<Task> {
   return updated;
 }
 
-/** タスクを削除する。紐付いていた実績はタスクなしに戻す（実績自体は残す） */
+/**
+ * チケット/タスクを削除する。チケットの場合は子タスクも削除し、
+ * 紐付いていた実績はすべてタスクなしに戻す（実績自体は残す）
+ */
 export async function deleteTask(id: string): Promise<void> {
   const db = await getDb();
-  await db.execute("UPDATE time_entries SET task_id = NULL WHERE task_id = $1", [id]);
+  await db.execute(
+    "UPDATE time_entries SET task_id = NULL WHERE task_id = $1 OR task_id IN (SELECT id FROM tasks WHERE parent_id = $1)",
+    [id],
+  );
+  await db.execute("DELETE FROM tasks WHERE parent_id = $1", [id]);
   await db.execute("DELETE FROM tasks WHERE id = $1", [id]);
 }
 

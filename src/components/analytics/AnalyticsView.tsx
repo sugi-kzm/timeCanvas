@@ -5,6 +5,7 @@ import { listEntriesBetween } from "../../db/entryRepo";
 import { computeWeekSummary } from "../../lib/summary";
 import {
   buildYearHeatmap,
+  categoryEstimateFactors,
   compareEstimates,
   estimateAccuracy,
   minutesByDay,
@@ -78,6 +79,10 @@ export function AnalyticsView() {
     [tasks, taskActualMinutes],
   );
   const accuracy = useMemo(() => estimateAccuracy(comparisons), [comparisons]);
+  const factors = useMemo(
+    () => categoryEstimateFactors(tasks, taskActualMinutes, categories),
+    [tasks, taskActualMinutes, categories],
+  );
   const maxCategoryMinutes = summary.byCategory[0]?.minutes ?? 0;
 
   const shift = (direction: 1 | -1) => {
@@ -159,7 +164,7 @@ export function AnalyticsView() {
         </section>
 
         <section className="analytics-section">
-          <h3 className="analytics-heading">見積 vs 実績（タスク）</h3>
+          <h3 className="analytics-heading">見積 vs 実績（チケット単位）</h3>
           {accuracy.overallRatio !== null && (
             <p className="analytics-total">
               全体精度: 見積 {formatHours(accuracy.totalEstimate)}h に対して実績{" "}
@@ -170,8 +175,8 @@ export function AnalyticsView() {
           )}
           {comparisons.length === 0 ? (
             <p className="tasks-empty">
-              見積時間を設定したタスクがありません。タスク画面で見積を入力し、
-              記録にタスクを紐付けるとここで比較できます。
+              見積時間を設定したチケットがありません。チケット画面で見積を入力し、
+              記録にチケット/タスクを紐付けるとここで比較できます。
             </p>
           ) : (
             <ul className="estimate-list">
@@ -202,6 +207,40 @@ export function AnalyticsView() {
                   </li>
                 );
               })}
+            </ul>
+          )}
+        </section>
+
+        <section className="analytics-section">
+          <h3 className="analytics-heading">見積精度の傾向（カテゴリ別の補正係数）</h3>
+          <p className="analytics-total">
+            係数 = これまでの実績合計 ÷ 見積合計。
+            新しい見積にこの係数を掛けると、過去の傾向を踏まえた予想時間になります。
+          </p>
+          {factors.length === 0 ? (
+            <p className="tasks-empty">
+              見積と実績が両方そろった項目がまだありません。データが溜まるほど
+              この係数が安定し、見積の精度改善に使えるようになります。
+            </p>
+          ) : (
+            <ul className="factor-list">
+              {factors.map((f) => (
+                <li key={f.categoryId ?? "none"} className="factor-row">
+                  <span className="category-dot" style={{ background: f.color }} />
+                  <span className="factor-name">{f.name}</span>
+                  <span className={`factor-value ${f.factor > 1.1 ? "over-text" : ""}`}>
+                    × {f.factor.toFixed(2)}
+                  </span>
+                  <span className="factor-count">{f.itemCount} 件</span>
+                  <span className="factor-hint">
+                    {f.factor > 1.1
+                      ? `見積の約 ${Math.round(f.factor * 100)}% かかる傾向`
+                      : f.factor < 0.9
+                        ? "見積より早く終わる傾向"
+                        : "ほぼ見積どおり"}
+                  </span>
+                </li>
+              ))}
             </ul>
           )}
         </section>

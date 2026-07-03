@@ -1,7 +1,7 @@
 import { useAppStore } from "../store/appStore";
 import { calendarLabel } from "../lib/dates";
 import type { CalendarMode } from "../types";
-import { IconChevronLeft, IconChevronRight } from "./icons";
+import { IconChevronLeft, IconChevronRight, IconSearch } from "./icons";
 
 const MODES: { key: CalendarMode; label: string }[] = [
   { key: "day", label: "日" },
@@ -18,6 +18,15 @@ export function Toolbar() {
   const setCalendarMode = useAppStore((s) => s.setCalendarMode);
   const searchKeyword = useAppStore((s) => s.searchKeyword);
   const setSearchKeyword = useAppStore((s) => s.setSearchKeyword);
+  const searchBoxOpen = useAppStore((s) => s.searchBoxOpen);
+  const setSearchBoxOpen = useAppStore((s) => s.setSearchBoxOpen);
+
+  const showSearchBox = searchBoxOpen || searchKeyword.trim() !== "";
+
+  const openAndFocusSearch = () => {
+    setSearchBoxOpen(true);
+    setTimeout(() => document.getElementById("entry-search-input")?.focus(), 0);
+  };
 
   return (
     <header className="toolbar">
@@ -43,20 +52,49 @@ export function Toolbar() {
       </button>
       <h1 className="week-label">{calendarLabel(calendarMode, anchorDate)}</h1>
       <div className="toolbar-spacer" />
-      <input
-        id="entry-search-input"
-        type="search"
-        className="text-input search-box"
-        placeholder="記録を検索 (Ctrl+F)"
-        value={searchKeyword}
-        onChange={(e) => setSearchKeyword(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            setSearchKeyword("");
-            (e.target as HTMLInputElement).blur();
+      <div
+        className="search-area"
+        onMouseEnter={() => setSearchBoxOpen(true)}
+        onMouseLeave={() => {
+          if (
+            searchKeyword.trim() === "" &&
+            document.activeElement?.id !== "entry-search-input"
+          ) {
+            setSearchBoxOpen(false);
           }
         }}
-      />
+      >
+        {showSearchBox ? (
+          <input
+            id="entry-search-input"
+            type="search"
+            className="text-input search-box"
+            placeholder="記録を検索 (Ctrl+F)"
+            value={searchKeyword}
+            onChange={(e) => setSearchKeyword(e.target.value)}
+            onBlur={() => {
+              if (searchKeyword.trim() === "") setSearchBoxOpen(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setSearchKeyword("");
+                setSearchBoxOpen(false);
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            className="btn icon-btn"
+            aria-label="記録を検索 (Ctrl+F)"
+            title="記録を検索 (Ctrl+F)"
+            onClick={openAndFocusSearch}
+          >
+            <IconSearch size={16} />
+          </button>
+        )}
+      </div>
       <div className="view-switch" role="group" aria-label="表示切替">
         {MODES.map((m) => (
           <button

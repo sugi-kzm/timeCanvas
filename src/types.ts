@@ -32,6 +32,11 @@ export interface NewEntryInput {
 
 export type TaskStatus = "open" | "done";
 
+/**
+ * チケットとタスクの両方を表す。
+ * parentId が null のものは「チケット」（大きな作業単位・ゴール）、
+ * parentId を持つものはチケット配下の「タスク」（細分化した作業）。
+ */
 export interface Task {
   id: string;
   title: string;
@@ -42,6 +47,8 @@ export interface Task {
   status: TaskStatus;
   /** "YYYY-MM-DD" 形式の期限。未設定は null */
   dueDate: string | null;
+  /** 親チケットの id。チケット自身は null */
+  parentId: string | null;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;

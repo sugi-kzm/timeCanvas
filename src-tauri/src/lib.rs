@@ -97,6 +97,15 @@ fn migrations() -> Vec<Migration> {
         ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "add_task_hierarchy",
+            sql: "
+            ALTER TABLE tasks ADD COLUMN parent_id TEXT REFERENCES tasks(id);
+            CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
+        ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

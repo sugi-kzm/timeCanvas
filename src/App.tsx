@@ -65,13 +65,15 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [statusMessage, setStatus]);
 
-  // Ctrl+F で検索ボックスにフォーカス
+  // Ctrl+F で検索ボックスを開いてフォーカス
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === "f") {
         e.preventDefault();
-        useAppStore.getState().setView("calendar");
-        document.getElementById("entry-search-input")?.focus();
+        const state = useAppStore.getState();
+        state.setView("calendar");
+        state.setSearchBoxOpen(true);
+        setTimeout(() => document.getElementById("entry-search-input")?.focus(), 0);
       }
     };
     window.addEventListener("keydown", onKeyDown);
