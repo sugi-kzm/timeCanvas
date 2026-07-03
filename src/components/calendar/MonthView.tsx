@@ -1,14 +1,21 @@
 import { useMemo } from "react";
 import { useAppStore } from "../../store/appStore";
 import type { TimeEntry } from "../../types";
-import { buildMonthGrid, dateKey, formatHm, fromLocalIso, isSameDay } from "../../lib/dates";
+import {
+  buildMonthGrid,
+  dateKey,
+  dowLabels,
+  formatHm,
+  fromLocalIso,
+  isSameDay,
+} from "../../lib/dates";
 import { UNCATEGORIZED_COLOR } from "../../lib/summary";
 
-const DOW_HEADER = ["月", "火", "水", "木", "金", "土", "日"];
 const MAX_CHIPS_PER_DAY = 3;
 
 export function MonthView() {
   const anchorDate = useAppStore((s) => s.anchorDate);
+  const weekStartsOn = useAppStore((s) => s.weekStartsOn);
   const entries = useAppStore((s) => s.entries);
   const categories = useAppStore((s) => s.categories);
   const hiddenIds = useAppStore((s) => s.hiddenCategoryIds);
@@ -26,21 +33,24 @@ export function MonthView() {
     return map;
   }, [entries, hiddenIds]);
 
-  const days = useMemo(() => buildMonthGrid(anchorDate), [anchorDate]);
+  const days = useMemo(
+    () => buildMonthGrid(anchorDate, weekStartsOn),
+    [anchorDate, weekStartsOn],
+  );
   const today = new Date();
 
   return (
     <div className="month-view">
       <div className="month-surface">
         <div className="month-dow-row">
-          {DOW_HEADER.map((label) => (
+          {dowLabels(weekStartsOn).map((label) => (
             <span key={label} className="month-dow">
               {label}
             </span>
           ))}
         </div>
         <div className="month-grid">
-        {days.map((day) => {
+        {days.map((day, index) => {
           const dayEntries = entriesByDate.get(dateKey(day)) ?? [];
           const overflow = dayEntries.length - MAX_CHIPS_PER_DAY;
           const outside = day.getMonth() !== anchorDate.getMonth();
@@ -48,7 +58,7 @@ export function MonthView() {
             <button
               key={day.toISOString()}
               type="button"
-              className={`month-cell ${outside ? "outside" : ""}`}
+              className={`month-cell ${index % 7 % 2 === 1 ? "alt" : ""} ${outside ? "outside" : ""}`}
               onClick={() => void showDay(day)}
               title={`${day.getMonth() + 1}月${day.getDate()}日を日表示で開く`}
             >

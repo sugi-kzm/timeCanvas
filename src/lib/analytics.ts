@@ -1,5 +1,5 @@
 import type { Category, Task, TimeEntry } from "../types";
-import { addDays, dateKey, durationMinutes, startOfWeek } from "./dates";
+import { addDays, dateKey, durationMinutes, startOfWeek, type WeekStartsOn } from "./dates";
 import { UNCATEGORIZED_COLOR, UNCATEGORIZED_LABEL } from "./summary";
 import { groupTickets, rollupActualMinutes, rollupEstimateMinutes } from "./tickets";
 
@@ -38,8 +38,9 @@ export interface HeatmapCell {
 export function buildYearHeatmap(
   year: number,
   minutes: ReadonlyMap<string, number>,
+  weekStartsOn: WeekStartsOn = 0,
 ): HeatmapCell[][] {
-  const gridStart = startOfWeek(new Date(year, 0, 1));
+  const gridStart = startOfWeek(new Date(year, 0, 1), weekStartsOn);
   const yearEnd = new Date(year, 11, 31);
   const weeks: HeatmapCell[][] = [];
   let cursor = gridStart;

@@ -22,6 +22,8 @@ export function GanttChart() {
   const categories = useAppStore((s) => s.categories);
   const entryRanges = useAppStore((s) => s.taskEntryRanges);
   const updateTask = useAppStore((s) => s.updateTask);
+  const addTask = useAppStore((s) => s.addTask);
+  const removeTask = useAppStore((s) => s.removeTask);
 
   // 既定は展開。クリックで折りたたんだチケットだけを記録する
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(new Set());
@@ -50,15 +52,6 @@ export function GanttChart() {
       return next;
     });
 
-  if (groups.length === 0) {
-    return (
-      <p className="tasks-empty">
-        チケットがまだありません。リスト表示でチケットを追加し、開始日・期限日を
-        設定するとここにスケジュールが表示されます。
-      </p>
-    );
-  }
-
   return (
     <div className="gantt">
       <div className="gantt-scroll">
@@ -79,6 +72,20 @@ export function GanttChart() {
             </div>
           </div>
           {/* 本体 */}
+          {groups.length === 0 && (
+            <div className="gantt-row">
+              <div className="gantt-left gantt-empty-left">
+                <span className="gantt-empty-text">
+                  チケットがありません。上の入力欄から追加してください。
+                </span>
+              </div>
+              <div className="gantt-timeline" style={{ width: timelineWidth }}>
+                {todayPos !== null && (
+                  <span className="gantt-today-line" style={{ left: todayPos * DAY_WIDTH }} />
+                )}
+              </div>
+            </div>
+          )}
           {groups.map((group) => {
             const expanded = !collapsedIds.has(group.ticket.id);
             return (
@@ -99,6 +106,19 @@ export function GanttChart() {
                   }
                   entryRange={entryRanges.get(group.ticket.id)}
                   onUpdate={updateTask}
+                  onAddChild={() => {
+                    const name = window.prompt("タスク名を入力してください");
+                    if (name !== null && name.trim() !== "") {
+                      void addTask(name.trim(), group.ticket.categoryId, group.ticket.id);
+                    }
+                  }}
+                  onDelete={() => {
+                    const warning =
+                      group.children.length > 0
+                        ? `チケット「${group.ticket.title}」を削除しますか？\n（子タスクも削除されます。記録済みの実績は残ります）`
+                        : `「${group.ticket.title}」を削除しますか？\n（記録済みの実績は残ります）`;
+                    if (window.confirm(warning)) void removeTask(group.ticket.id);
+                  }}
                 />
                 {expanded &&
                   group.children.map((child) => (
@@ -118,6 +138,15 @@ export function GanttChart() {
                       }
                       entryRange={entryRanges.get(child.id)}
                       onUpdate={updateTask}
+                      onDelete={() => {
+                        if (
+                          window.confirm(
+                            `タスク「${child.title}」を削除しますか？\n（記録済みの実績は残ります）`,
+                          )
+                        ) {
+                          void removeTask(child.id);
+                        }
+                      }}
                     />
                   ))}
               </div>
@@ -145,6 +174,8 @@ interface GanttRowProps {
   color: string;
   entryRange: { from: string; to: string } | undefined;
   onUpdate: (task: Task) => Promise<void>;
+  onAddChild?: () => void;
+  onDelete: () => void;
 }
 
 function GanttRow({
@@ -159,6 +190,8 @@ function GanttRow({
   color,
   entryRange,
   onUpdate,
+  onAddChild,
+  onDelete,
 }: GanttRowProps) {
   const status = statusConfig(task.status);
   const span = taskSpan(task, entryRange);
@@ -195,6 +228,26 @@ function GanttRow({
           >
             {status.label}
           </span>
+          {isTicket && onAddChild !== undefined && (
+            <button
+              type="button"
+              className="ghost-icon-btn"
+              title="子タスクを追加"
+              aria-label={`${task.title} に子タスクを追加`}
+              onClick={onAddChild}
+            >
+              ＋
+            </button>
+          )}
+          <button
+            type="button"
+            className="ghost-icon-btn gantt-del"
+            title="削除"
+            aria-label={`${task.title} を削除`}
+            onClick={onDelete}
+          >
+            ×
+          </button>
         </div>
         <div className={`gantt-left-dates ${isTicket ? "" : "child"}`}>
           <input
@@ -213,6 +266,28 @@ function GanttRow({
             onChange={(e) => void onUpdate({ ...task, dueDate: e.target.value || null })}
           />
           {span !== null && span.derived && <span className="gantt-derived-note">実績から</span>}
+          <span className="spacer" />
+          <span className="gantt-estimate">
+            見積
+            <input
+              type="number"
+              className="gantt-estimate-input"
+              min={0}
+              step={0.25}
+              placeholder="-"
+              defaultValue={
+                task.estimateMinutes !== null ? task.estimateMinutes / 60 : ""
+              }
+              onBlur={(e) => {
+                const value = e.target.value.trim();
+                const minutes = value === "" ? null : Math.round(Number(value) * 60);
+                if (minutes !== task.estimateMinutes && (minutes === null || minutes >= 0)) {
+                  void onUpdate({ ...task, estimateMinutes: minutes });
+                }
+              }}
+            />
+            h
+          </span>
         </div>
       </div>
       <div className="gantt-timeline" style={{ width: timelineWidth }}>

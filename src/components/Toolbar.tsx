@@ -12,6 +12,7 @@ const MODES: { key: CalendarMode; label: string }[] = [
 export function Toolbar() {
   const calendarMode = useAppStore((s) => s.calendarMode);
   const anchorDate = useAppStore((s) => s.anchorDate);
+  const weekStartsOn = useAppStore((s) => s.weekStartsOn);
   const goToday = useAppStore((s) => s.goToday);
   const goPrev = useAppStore((s) => s.goPrev);
   const goNext = useAppStore((s) => s.goNext);
@@ -50,7 +51,7 @@ export function Toolbar() {
       >
         <IconChevronRight />
       </button>
-      <h1 className="week-label">{calendarLabel(calendarMode, anchorDate)}</h1>
+      <h1 className="week-label">{calendarLabel(calendarMode, anchorDate, weekStartsOn)}</h1>
       <div className="toolbar-spacer" />
       <div
         className="search-area"

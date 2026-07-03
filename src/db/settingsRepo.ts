@@ -4,6 +4,7 @@ export const SETTING_KEYS = {
   backupDir: "backup_dir",
   lastBackupAt: "last_backup_at",
   notesDir: "notes_dir",
+  weekStartsOn: "week_starts_on",
 } as const;
 
 export async function getSetting(key: string): Promise<string | null> {

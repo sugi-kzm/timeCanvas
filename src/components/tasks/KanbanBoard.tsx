@@ -16,6 +16,7 @@ export function KanbanBoard() {
   const actualMinutes = useAppStore((s) => s.taskActualMinutes);
   const moveTaskStatus = useAppStore((s) => s.moveTaskStatus);
   const addTask = useAppStore((s) => s.addTask);
+  const removeTask = useAppStore((s) => s.removeTask);
   const openEditor = useAppStore((s) => s.openEditor);
 
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null);
@@ -69,9 +70,14 @@ export function KanbanBoard() {
     setAddingStatus(null);
   };
 
+  // 「レビュー中」列はカードがあるときだけ表示する（既定は To-Do / 進行中 / 完了 の3列）
+  const visibleStatuses = TASK_STATUSES.filter(
+    (status) => status.key !== "review" || (byStatus.get("review")?.length ?? 0) > 0,
+  );
+
   return (
     <div className="kanban">
-      {TASK_STATUSES.map((status) => {
+      {visibleStatuses.map((status) => {
         const columnCards = byStatus.get(status.key) ?? [];
         return (
           <div
@@ -113,6 +119,19 @@ export function KanbanBoard() {
                     }}
                     title="ドラッグでステータスを変更"
                   >
+                    <button
+                      type="button"
+                      className="kanban-card-del"
+                      aria-label={`${card.title} を削除`}
+                      title="削除"
+                      onClick={() => {
+                        if (window.confirm(`「${card.title}」を削除しますか？\n（記録済みの実績は残ります）`)) {
+                          void removeTask(card.id);
+                        }
+                      }}
+                    >
+                      ×
+                    </button>
                     {parent !== undefined && (
                       <span className="kanban-card-parent">{parent.title}</span>
                     )}

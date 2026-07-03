@@ -10,7 +10,7 @@ import { getSetting, setSetting, SETTING_KEYS } from "../db/settingsRepo";
 import { detectOneDriveDir, runBackup } from "../db/backupService";
 import { IconClose } from "./icons";
 
-type Tab = "categories" | "data";
+type Tab = "categories" | "display" | "data";
 
 export function SettingsDialog() {
   const [tab, setTab] = useState<Tab>("categories");
@@ -47,13 +47,23 @@ export function SettingsDialog() {
           <button
             type="button"
             role="tab"
+            className={`tab ${tab === "display" ? "active" : ""}`}
+            onClick={() => setTab("display")}
+          >
+            表示
+          </button>
+          <button
+            type="button"
+            role="tab"
             className={`tab ${tab === "data" ? "active" : ""}`}
             onClick={() => setTab("data")}
           >
             データ
           </button>
         </div>
-        {tab === "categories" ? <CategoriesTab /> : <DataTab />}
+        {tab === "categories" && <CategoriesTab />}
+        {tab === "display" && <DisplayTab />}
+        {tab === "data" && <DataTab />}
       </div>
     </div>
   );
@@ -134,6 +144,31 @@ function CategoriesTab() {
           追加
         </button>
       </div>
+    </div>
+  );
+}
+
+function DisplayTab() {
+  const weekStartsOn = useAppStore((s) => s.weekStartsOn);
+  const setWeekStartsOn = useAppStore((s) => s.setWeekStartsOn);
+
+  return (
+    <div className="settings-body">
+      <h3 className="settings-heading">カレンダー</h3>
+      <div className="settings-row">
+        <span className="settings-value">週の開始曜日</span>
+        <select
+          className="select-input settings-week-start"
+          value={weekStartsOn}
+          onChange={(e) => void setWeekStartsOn(e.target.value === "1" ? 1 : 0)}
+        >
+          <option value={0}>日曜日</option>
+          <option value={1}>月曜日</option>
+        </select>
+      </div>
+      <p className="settings-hint">
+        週カレンダー・月カレンダー・ミニカレンダー・年間ヒートマップの並びに反映されます。
+      </p>
     </div>
   );
 }

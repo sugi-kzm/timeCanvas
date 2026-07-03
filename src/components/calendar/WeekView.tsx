@@ -60,6 +60,7 @@ const HOURS = Array.from({ length: 24 }, (_, h) => h);
 export function WeekView() {
   const calendarMode = useAppStore((s) => s.calendarMode);
   const anchorDate = useAppStore((s) => s.anchorDate);
+  const weekStartsOn = useAppStore((s) => s.weekStartsOn);
   const entries = useAppStore((s) => s.entries);
   const categories = useAppStore((s) => s.categories);
   const hiddenIds = useAppStore((s) => s.hiddenCategoryIds);
@@ -80,9 +81,9 @@ export function WeekView() {
 
   const days = useMemo(() => {
     if (calendarMode === "day") return [startOfDay(anchorDate)];
-    const weekStart = startOfWeek(anchorDate);
+    const weekStart = startOfWeek(anchorDate, weekStartsOn);
     return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  }, [calendarMode, anchorDate]);
+  }, [calendarMode, anchorDate, weekStartsOn]);
 
   const dayWidth = calendarMode === "day" ? DAY_WIDTH_SINGLE : DAY_WIDTH;
 
@@ -302,7 +303,7 @@ export function WeekView() {
               return (
                 <div
                   key={day.toDateString()}
-                  className={`day-column ${isToday ? "today" : ""}`}
+                  className={`day-column ${dayIndex % 2 === 1 ? "alt" : ""} ${isToday ? "today" : ""}`}
                   style={{ width: dayWidth }}
                 >
                   {HOURS.map((h) => (

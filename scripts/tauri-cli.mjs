@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
+import net from "node:net";
 import { platform } from "node:os";
 
 function isWsl() {
@@ -14,6 +15,7 @@ function isWsl() {
 }
 
 const env = { ...process.env };
+const args = process.argv.slice(2);
 
 if (isWsl()) {
   const wslWebKitDefaults = {
@@ -34,8 +36,32 @@ if (isWsl()) {
   }
 }
 
+function canListen(port, host) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once("error", (error) => {
+      resolve(error.code !== "EADDRINUSE");
+    });
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, host);
+  });
+}
+
+if (args[0] === "dev" && !(await canListen(1420, "127.0.0.1"))) {
+  console.error(
+    [
+      "Port 1420 is already in use.",
+      "Stop the existing TimeCanvas/Vite dev server first, then run `npm run tauri dev` again.",
+      "You can inspect the owner with: ss -ltnp 'sport = :1420'",
+    ].join("\n"),
+  );
+  process.exit(1);
+}
+
 const command = platform() === "win32" ? "tauri.cmd" : "tauri";
-const child = spawn(command, process.argv.slice(2), {
+const child = spawn(command, args, {
   env,
   shell: platform() === "win32",
   stdio: "inherit",

@@ -8,6 +8,7 @@ import {
   clampMinutes,
   dateKey,
   dayMinuteToIso,
+  dowLabels,
   durationMinutes,
   formatHm,
   formatHours,
@@ -42,21 +43,33 @@ describe("toLocalIso / fromLocalIso", () => {
 });
 
 describe("startOfWeek", () => {
-  it("水曜日から同じ週の月曜日を返す", () => {
+  it("既定（日曜始まり）: 木曜日から同じ週の日曜日を返す", () => {
     // 2026-07-02 は木曜日
-    const monday = startOfWeek(new Date(2026, 6, 2));
+    const sunday = startOfWeek(new Date(2026, 6, 2));
+    expect(toLocalIso(sunday)).toBe("2026-06-28T00:00:00");
+  });
+
+  it("既定: 日曜日はそのまま返る", () => {
+    const sunday = startOfWeek(new Date(2026, 5, 28, 15, 0));
+    expect(toLocalIso(sunday)).toBe("2026-06-28T00:00:00");
+  });
+
+  it("月曜始まり設定: 木曜日から同じ週の月曜日を返す", () => {
+    const monday = startOfWeek(new Date(2026, 6, 2), 1);
     expect(toLocalIso(monday)).toBe("2026-06-29T00:00:00");
   });
 
-  it("日曜日は前週扱いではなく同じ週の月曜日に戻る", () => {
+  it("月曜始まり設定: 日曜日は前の月曜日に戻る", () => {
     // 2026-07-05 は日曜日
-    const monday = startOfWeek(new Date(2026, 6, 5));
+    const monday = startOfWeek(new Date(2026, 6, 5), 1);
     expect(toLocalIso(monday)).toBe("2026-06-29T00:00:00");
   });
+});
 
-  it("月曜日はそのまま返る", () => {
-    const monday = startOfWeek(new Date(2026, 5, 29, 15, 0));
-    expect(toLocalIso(monday)).toBe("2026-06-29T00:00:00");
+describe("dowLabels", () => {
+  it("週開始曜日に合わせて回転する", () => {
+    expect(dowLabels(0)).toEqual(["日", "月", "火", "水", "木", "金", "土"]);
+    expect(dowLabels(1)).toEqual(["月", "火", "水", "木", "金", "土", "日"]);
   });
 });
 
@@ -140,17 +153,19 @@ describe("カレンダーモード", () => {
     expect(toLocalIso(to)).toBe("2026-07-03T00:00:00");
   });
 
-  it("calendarRange: 週表示は月曜からの 7 日分", () => {
+  it("calendarRange: 週表示は週開始曜日からの 7 日分（既定は日曜）", () => {
     const { from, to } = calendarRange("week", thursday);
-    expect(toLocalIso(from)).toBe("2026-06-29T00:00:00");
-    expect(toLocalIso(to)).toBe("2026-07-06T00:00:00");
+    expect(toLocalIso(from)).toBe("2026-06-28T00:00:00");
+    expect(toLocalIso(to)).toBe("2026-07-05T00:00:00");
+    const monday = calendarRange("week", thursday, 1);
+    expect(toLocalIso(monday.from)).toBe("2026-06-29T00:00:00");
   });
 
-  it("calendarRange: 月表示は月初を含む週の月曜から 42 日分", () => {
+  it("calendarRange: 月表示は月初を含む週の開始曜日から 42 日分", () => {
     const { from, to } = calendarRange("month", thursday);
-    // 2026-07-01 は水曜 → その週の月曜は 6/29
-    expect(toLocalIso(from)).toBe("2026-06-29T00:00:00");
-    expect(toLocalIso(to)).toBe("2026-08-10T00:00:00");
+    // 2026-07-01 は水曜 → その週の日曜は 6/28
+    expect(toLocalIso(from)).toBe("2026-06-28T00:00:00");
+    expect(toLocalIso(to)).toBe("2026-08-09T00:00:00");
   });
 
   it("shiftAnchor: 日=±1日、週=±7日、月=±1ヶ月", () => {
@@ -167,15 +182,18 @@ describe("カレンダーモード", () => {
 
   it("calendarLabel: モードごとの表示", () => {
     expect(calendarLabel("day", thursday)).toBe("2026年7月2日（木）");
-    expect(calendarLabel("week", thursday)).toBe("2026年6月29日 - 7月5日");
+    expect(calendarLabel("week", thursday)).toBe("2026年6月28日 - 7月4日");
+    expect(calendarLabel("week", thursday, 1)).toBe("2026年6月29日 - 7月5日");
     expect(calendarLabel("month", thursday)).toBe("2026年7月");
   });
 
-  it("buildMonthGrid: 42 日で月初の週の月曜から始まる", () => {
+  it("buildMonthGrid: 42 日で月初の週の開始曜日から始まる", () => {
     const grid = buildMonthGrid(thursday);
     expect(grid).toHaveLength(42);
-    expect(toLocalIso(grid[0]).slice(0, 10)).toBe("2026-06-29");
-    expect(toLocalIso(grid[41]).slice(0, 10)).toBe("2026-08-09");
+    expect(toLocalIso(grid[0]).slice(0, 10)).toBe("2026-06-28");
+    expect(toLocalIso(grid[41]).slice(0, 10)).toBe("2026-08-08");
+    const mondayGrid = buildMonthGrid(thursday, 1);
+    expect(toLocalIso(mondayGrid[0]).slice(0, 10)).toBe("2026-06-29");
   });
 
   it("dateKey は YYYY-MM-DD を返す", () => {

@@ -72,11 +72,11 @@ describe("heatmapLevel", () => {
 describe("buildYearHeatmap", () => {
   it("1/1 を含む週から 12/31 を含む週まで、各週7日で構成される", () => {
     const weeks = buildYearHeatmap(2026, new Map());
-    // 2026-01-01 は木曜 → 最初の週は 2025-12-29(月) 始まり
-    expect(weeks[0][0].key).toBe("2025-12-29");
+    // 2026-01-01 は木曜 → 最初の週は 2025-12-28(日) 始まり（既定は日曜始まり）
+    expect(weeks[0][0].key).toBe("2025-12-28");
     expect(weeks[0][0].inYear).toBe(false);
-    expect(weeks[0][3].key).toBe("2026-01-01");
-    expect(weeks[0][3].inYear).toBe(true);
+    expect(weeks[0][4].key).toBe("2026-01-01");
+    expect(weeks[0][4].inYear).toBe(true);
     for (const week of weeks) expect(week).toHaveLength(7);
     const last = weeks[weeks.length - 1];
     expect(last.some((c) => c.key === "2026-12-31")).toBe(true);

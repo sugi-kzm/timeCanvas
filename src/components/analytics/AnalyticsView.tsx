@@ -25,13 +25,14 @@ type PeriodKind = "week" | "month" | "year";
 
 const HEAT_COLORS = ["#EBEBEA", "#C8E1F8", "#8FC3F0", "#4D9EE6", "#1A6DC0"];
 
-function periodLabel(kind: PeriodKind, anchor: Date): string {
-  if (kind === "week") return calendarLabel("week", anchor);
+function periodLabel(kind: PeriodKind, anchor: Date, weekStartsOn: 0 | 1): string {
+  if (kind === "week") return calendarLabel("week", anchor, weekStartsOn);
   if (kind === "month") return calendarLabel("month", anchor);
   return `${anchor.getFullYear()}年`;
 }
 
 export function AnalyticsView() {
+  const weekStartsOn = useAppStore((s) => s.weekStartsOn);
   const categories = useAppStore((s) => s.categories);
   const tasks = useAppStore((s) => s.tasks);
   const taskActualMinutes = useAppStore((s) => s.taskActualMinutes);
@@ -50,29 +51,29 @@ export function AnalyticsView() {
             from: new Date(anchor.getFullYear(), 0, 1),
             to: new Date(anchor.getFullYear() + 1, 0, 1),
           }
-        : calendarRange(periodKind, anchor);
+        : calendarRange(periodKind, anchor, weekStartsOn);
     listEntriesBetween(toLocalIso(range.from), toLocalIso(range.to))
       .then(setPeriodEntries)
       .catch((e) => setStatus(`集計データの読み込みに失敗しました: ${String(e)}`));
-  }, [periodKind, anchor, setStatus]);
+  }, [periodKind, anchor, weekStartsOn, setStatus]);
 
   // ヒートマップ用に表示年の全エントリを読み込み（グリッドは前後年に少しはみ出す）
   const year = anchor.getFullYear();
   useEffect(() => {
-    const from = startOfWeek(new Date(year, 0, 1));
+    const from = startOfWeek(new Date(year, 0, 1), weekStartsOn);
     const to = addDays(new Date(year, 11, 31), 7);
     listEntriesBetween(toLocalIso(from), toLocalIso(to))
       .then(setYearEntries)
       .catch((e) => setStatus(`年間データの読み込みに失敗しました: ${String(e)}`));
-  }, [year, setStatus]);
+  }, [year, weekStartsOn, setStatus]);
 
   const summary = useMemo(
     () => computeWeekSummary(periodEntries, categories),
     [periodEntries, categories],
   );
   const heatmapWeeks = useMemo(
-    () => buildYearHeatmap(year, minutesByDay(yearEntries)),
-    [year, yearEntries],
+    () => buildYearHeatmap(year, minutesByDay(yearEntries), weekStartsOn),
+    [year, yearEntries, weekStartsOn],
   );
   const comparisons = useMemo(
     () => compareEstimates(tasks, taskActualMinutes),
@@ -108,7 +109,9 @@ export function AnalyticsView() {
           <button type="button" className="btn icon-btn" aria-label="次へ" onClick={() => shift(1)}>
             <IconChevronRight />
           </button>
-          <span className="analytics-period-label">{periodLabel(periodKind, anchor)}</span>
+          <span className="analytics-period-label">
+            {periodLabel(periodKind, anchor, weekStartsOn)}
+          </span>
           <span className="spacer" />
           <div className="view-switch" role="group" aria-label="集計期間">
             {(

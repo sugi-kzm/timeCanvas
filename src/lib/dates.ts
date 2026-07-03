@@ -24,12 +24,14 @@ export function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-/** 週の開始日（月曜）を返す */
-export function startOfWeek(d: Date): Date {
+/** 週の開始曜日（0=日曜, 1=月曜）。既定は日曜 */
+export type WeekStartsOn = 0 | 1;
+
+/** 週の開始日を返す（既定: 日曜始まり） */
+export function startOfWeek(d: Date, weekStartsOn: WeekStartsOn = 0): Date {
   const day = startOfDay(d);
-  const dow = day.getDay(); // 0=日, 1=月, ...
-  const diff = dow === 0 ? -6 : 1 - dow;
-  return addDays(day, diff);
+  const diff = (day.getDay() - weekStartsOn + 7) % 7;
+  return addDays(day, -diff);
 }
 
 export function addDays(d: Date, n: number): Date {
@@ -104,6 +106,11 @@ export function weekRangeLabel(weekStart: Date): string {
 
 export const DOW_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
+/** 週開始曜日に合わせて並べた曜日ラベル（ヘッダ表示用） */
+export function dowLabels(weekStartsOn: WeekStartsOn): string[] {
+  return Array.from({ length: 7 }, (_, i) => DOW_LABELS[(weekStartsOn + i) % 7]);
+}
+
 /** 指定日の 0:00 に分を加えたローカル ISO 文字列 */
 export function dayMinuteToIso(day: Date, minute: number): string {
   return toLocalIso(addMinutes(startOfDay(day), minute));
@@ -112,16 +119,20 @@ export function dayMinuteToIso(day: Date, minute: number): string {
 // ---------- カレンダーモード（日 / 週 / 月） ----------
 
 /** モードに応じたエントリ読み込み範囲 [from, to) */
-export function calendarRange(mode: CalendarMode, anchor: Date): { from: Date; to: Date } {
+export function calendarRange(
+  mode: CalendarMode,
+  anchor: Date,
+  weekStartsOn: WeekStartsOn = 0,
+): { from: Date; to: Date } {
   if (mode === "day") {
     const from = startOfDay(anchor);
     return { from, to: addDays(from, 1) };
   }
   if (mode === "week") {
-    const from = startOfWeek(anchor);
+    const from = startOfWeek(anchor, weekStartsOn);
     return { from, to: addDays(from, 7) };
   }
-  const gridStart = startOfWeek(new Date(anchor.getFullYear(), anchor.getMonth(), 1));
+  const gridStart = startOfWeek(new Date(anchor.getFullYear(), anchor.getMonth(), 1), weekStartsOn);
   return { from: gridStart, to: addDays(gridStart, 42) };
 }
 
@@ -133,17 +144,21 @@ export function shiftAnchor(mode: CalendarMode, anchor: Date, direction: 1 | -1)
 }
 
 /** ツールバーに表示する期間ラベル */
-export function calendarLabel(mode: CalendarMode, anchor: Date): string {
+export function calendarLabel(
+  mode: CalendarMode,
+  anchor: Date,
+  weekStartsOn: WeekStartsOn = 0,
+): string {
   if (mode === "day") {
     return `${anchor.getFullYear()}年${anchor.getMonth() + 1}月${anchor.getDate()}日（${DOW_LABELS[anchor.getDay()]}）`;
   }
-  if (mode === "week") return weekRangeLabel(startOfWeek(anchor));
+  if (mode === "week") return weekRangeLabel(startOfWeek(anchor, weekStartsOn));
   return `${anchor.getFullYear()}年${anchor.getMonth() + 1}月`;
 }
 
-/** 月表示・ミニカレンダー用の 6 週 × 7 日のグリッド（月初を含む週の月曜から42日） */
-export function buildMonthGrid(anchor: Date): Date[] {
-  const gridStart = startOfWeek(new Date(anchor.getFullYear(), anchor.getMonth(), 1));
+/** 月表示・ミニカレンダー用の 6 週 × 7 日のグリッド（月初を含む週の開始曜日から42日） */
+export function buildMonthGrid(anchor: Date, weekStartsOn: WeekStartsOn = 0): Date[] {
+  const gridStart = startOfWeek(new Date(anchor.getFullYear(), anchor.getMonth(), 1), weekStartsOn);
   return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
 }
 

@@ -8,10 +8,17 @@ import type {
   TimeEntry,
   ViewKind,
 } from "../types";
-import { calendarRange, fromLocalIso, shiftAnchor, toLocalIso } from "../lib/dates";
+import {
+  calendarRange,
+  fromLocalIso,
+  shiftAnchor,
+  toLocalIso,
+  type WeekStartsOn,
+} from "../lib/dates";
 import * as categoryRepo from "../db/categoryRepo";
 import * as entryRepo from "../db/entryRepo";
 import * as taskRepo from "../db/taskRepo";
+import { getSetting, setSetting, SETTING_KEYS } from "../db/settingsRepo";
 
 export interface QuickCreateState {
   /** 対象日の 0:00 の Date */
@@ -34,7 +41,7 @@ export type EditorState =
     }
   | { mode: "edit"; entry: TimeEntry };
 
-export type TasksViewMode = "list" | "board" | "gantt";
+export type TasksViewMode = "board" | "gantt";
 
 interface AppState {
   view: ViewKind;
@@ -48,8 +55,10 @@ interface AppState {
   taskActualMinutes: ReadonlyMap<string, number>;
   /** タスクID → 実績の期間（開始日〜最終日）。ガントで日付未設定時の表示に使う */
   taskEntryRanges: ReadonlyMap<string, taskRepo.EntryDateRange>;
-  /** チケット画面の表示モード（リスト / カンバン / ガント） */
+  /** チケット画面の表示モード（カンバン / ガント） */
   tasksViewMode: TasksViewMode;
+  /** 週の開始曜日（0=日曜, 1=月曜）。設定から変更できる */
+  weekStartsOn: WeekStartsOn;
   hiddenCategoryIds: readonly string[];
   selectedEntryId: string | null;
   quickCreate: QuickCreateState | null;
@@ -91,6 +100,7 @@ interface AppState {
   moveTaskStatus: (task: Task, status: TaskStatus) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
   setTasksViewMode: (mode: TasksViewMode) => void;
+  setWeekStartsOn: (value: WeekStartsOn) => Promise<void>;
 
   setSearchKeyword: (keyword: string) => void;
   setSearchBoxOpen: (open: boolean) => void;
@@ -119,7 +129,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   tasks: [],
   taskActualMinutes: new Map(),
   taskEntryRanges: new Map(),
-  tasksViewMode: "list",
+  tasksViewMode: "board",
+  weekStartsOn: 0,
   hiddenCategoryIds: [],
   selectedEntryId: null,
   quickCreate: null,
@@ -133,7 +144,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       await categoryRepo.ensureDefaultCategories();
       const categories = await categoryRepo.listCategories();
-      set({ categories });
+      const weekStartsOn = (await getSetting(SETTING_KEYS.weekStartsOn)) === "1" ? 1 : 0;
+      set({ categories, weekStartsOn });
       await Promise.all([get().reloadEntries(), get().loadTasks()]);
     } catch (e) {
       set({ statusMessage: `初期化に失敗しました: ${String(e)}` });
@@ -165,7 +177,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   reloadEntries: async () => {
     try {
-      const { from, to } = calendarRange(get().calendarMode, get().anchorDate);
+      const { from, to } = calendarRange(
+        get().calendarMode,
+        get().anchorDate,
+        get().weekStartsOn,
+      );
       const entries = await entryRepo.listEntriesBetween(toLocalIso(from), toLocalIso(to));
       set({ entries });
     } catch (e) {
@@ -302,6 +318,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setTasksViewMode: (mode) => set({ tasksViewMode: mode }),
+
+  setWeekStartsOn: async (value) => {
+    set({ weekStartsOn: value });
+    try {
+      await setSetting(SETTING_KEYS.weekStartsOn, String(value));
+    } catch (e) {
+      set({ statusMessage: `設定の保存に失敗しました: ${String(e)}` });
+    }
+    await get().reloadEntries();
+  },
 
   setSearchKeyword: (keyword) => set({ searchKeyword: keyword }),
   setSearchBoxOpen: (open) => set({ searchBoxOpen: open }),
