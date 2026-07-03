@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   computeGanttRange,
+  dayCells,
   dayDiff,
   monthSegments,
+  offsetToDate,
   spanToBar,
   taskSpan,
   todayOffset,
@@ -58,22 +60,31 @@ describe("taskSpan", () => {
 describe("computeGanttRange", () => {
   const today = new Date(2026, 6, 3);
 
-  it("バーの前後に余白を取り最低6週間を確保する", () => {
+  it("開始は今日の startOffsetDays 日前（既定 3 日）", () => {
     const range = computeGanttRange([], today);
-    expect(range.totalDays).toBeGreaterThanOrEqual(42);
-    expect(range.from <= today).toBe(true);
+    expect(dayDiff(range.from, today)).toBe(3);
+    const wide = computeGanttRange([], today, 7);
+    expect(dayDiff(wide.from, today)).toBe(7);
   });
 
-  it("全バーが範囲に収まる", () => {
+  it("バーがなくても今日から最低4週間先まで表示する", () => {
+    const range = computeGanttRange([], today);
+    expect(dayDiff(today, range.to)).toBeGreaterThanOrEqual(27);
+  });
+
+  it("終了はすべてのバーの終端 + 余白まで伸びる", () => {
     const range = computeGanttRange(
-      [
-        { start: "2026-06-01", end: "2026-06-10", derived: false },
-        { start: "2026-08-01", end: "2026-08-20", derived: false },
-      ],
+      [{ start: "2026-08-01", end: "2026-08-20", derived: false }],
       today,
     );
-    expect(dayDiff(range.from, new Date(2026, 5, 1))).toBeGreaterThanOrEqual(0);
     expect(dayDiff(new Date(2026, 7, 20), range.to)).toBeGreaterThanOrEqual(0);
+  });
+
+  it("dayCells は範囲の全日を返し offsetToDate と往復できる", () => {
+    const range = computeGanttRange([], today);
+    const cells = dayCells(range);
+    expect(cells).toHaveLength(range.totalDays);
+    expect(offsetToDate(range, 3)).toBe("2026-07-03");
   });
 });
 

@@ -13,17 +13,10 @@ export function TasksView() {
   const viewMode = useAppStore((s) => s.tasksViewMode);
   const setViewMode = useAppStore((s) => s.setTasksViewMode);
   const categories = useAppStore((s) => s.categories);
-  const addTask = useAppStore((s) => s.addTask);
+  const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
 
-  const [newTitle, setNewTitle] = useState("");
-  const [newCategoryId, setNewCategoryId] = useState<string | null>(categories[0]?.id ?? null);
-
-  const submit = () => {
-    const title = newTitle.trim();
-    if (title === "") return;
-    void addTask(title, newCategoryId, null);
-    setNewTitle("");
-  };
+  /** null = すべて */
+  const [filterCategoryId, setFilterCategoryId] = useState<string | null>(null);
 
   return (
     <div className="tasks-view wide">
@@ -44,34 +37,43 @@ export function TasksView() {
             ))}
           </div>
         </div>
-        <div className="task-add-row">
-          <input
-            type="text"
-            className="text-input"
-            placeholder="新しいチケットを追加（Enter で登録）"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submit();
-            }}
-          />
-          <select
-            className="select-input task-add-category"
-            value={newCategoryId ?? ""}
-            onChange={(e) => setNewCategoryId(e.target.value === "" ? null : e.target.value)}
-          >
+        <div className="tickets-layout">
+          <aside className="tickets-side" aria-label="チケットの分類">
+            <button
+              type="button"
+              className={`tickets-side-item ${filterCategoryId === null ? "active" : ""}`}
+              onClick={() => setFilterCategoryId(null)}
+            >
+              すべて
+            </button>
             {categories.map((c) => (
-              <option key={c.id} value={c.id}>
+              <button
+                key={c.id}
+                type="button"
+                className={`tickets-side-item ${filterCategoryId === c.id ? "active" : ""}`}
+                onClick={() => setFilterCategoryId(c.id)}
+              >
+                <span className="category-dot" style={{ background: c.color }} />
                 {c.name}
-              </option>
+              </button>
             ))}
-            <option value="">未分類</option>
-          </select>
-          <button type="button" className="btn primary" onClick={submit}>
-            追加
-          </button>
+            <button
+              type="button"
+              className="tickets-side-item add"
+              title="カテゴリの追加は設定から"
+              onClick={() => setSettingsOpen(true)}
+            >
+              + 分類を追加
+            </button>
+          </aside>
+          <div className="tickets-main">
+            {viewMode === "board" ? (
+              <KanbanBoard filterCategoryId={filterCategoryId} />
+            ) : (
+              <GanttChart filterCategoryId={filterCategoryId} />
+            )}
+          </div>
         </div>
-        {viewMode === "board" ? <KanbanBoard /> : <GanttChart />}
       </div>
     </div>
   );

@@ -59,6 +59,8 @@ interface AppState {
   tasksViewMode: TasksViewMode;
   /** 週の開始曜日（0=日曜, 1=月曜）。設定から変更できる */
   weekStartsOn: WeekStartsOn;
+  /** ガントの開始位置（今日の何日前から表示するか）。設定から変更できる */
+  ganttStartOffsetDays: number;
   hiddenCategoryIds: readonly string[];
   selectedEntryId: string | null;
   quickCreate: QuickCreateState | null;
@@ -101,6 +103,7 @@ interface AppState {
   removeTask: (id: string) => Promise<void>;
   setTasksViewMode: (mode: TasksViewMode) => void;
   setWeekStartsOn: (value: WeekStartsOn) => Promise<void>;
+  setGanttStartOffsetDays: (days: number) => Promise<void>;
 
   setSearchKeyword: (keyword: string) => void;
   setSearchBoxOpen: (open: boolean) => void;
@@ -131,6 +134,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   taskEntryRanges: new Map(),
   tasksViewMode: "board",
   weekStartsOn: 0,
+  ganttStartOffsetDays: 3,
   hiddenCategoryIds: [],
   selectedEntryId: null,
   quickCreate: null,
@@ -145,7 +149,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       await categoryRepo.ensureDefaultCategories();
       const categories = await categoryRepo.listCategories();
       const weekStartsOn = (await getSetting(SETTING_KEYS.weekStartsOn)) === "1" ? 1 : 0;
-      set({ categories, weekStartsOn });
+      const offsetSetting = await getSetting(SETTING_KEYS.ganttStartOffsetDays);
+      const offsetRaw = offsetSetting === null ? NaN : Number(offsetSetting);
+      const ganttStartOffsetDays =
+        Number.isFinite(offsetRaw) && offsetRaw >= 0 && offsetRaw <= 60 ? offsetRaw : 3;
+      set({ categories, weekStartsOn, ganttStartOffsetDays });
       await Promise.all([get().reloadEntries(), get().loadTasks()]);
     } catch (e) {
       set({ statusMessage: `初期化に失敗しました: ${String(e)}` });
@@ -318,6 +326,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setTasksViewMode: (mode) => set({ tasksViewMode: mode }),
+
+  setGanttStartOffsetDays: async (days) => {
+    const clamped = Math.max(0, Math.min(60, Math.round(days)));
+    set({ ganttStartOffsetDays: clamped });
+    try {
+      await setSetting(SETTING_KEYS.ganttStartOffsetDays, String(clamped));
+    } catch (e) {
+      set({ statusMessage: `設定の保存に失敗しました: ${String(e)}` });
+    }
+  },
 
   setWeekStartsOn: async (value) => {
     set({ weekStartsOn: value });

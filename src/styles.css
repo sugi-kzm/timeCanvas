@@ -555,17 +555,19 @@ button {
   border-right: 1px solid var(--border);
 }
 
-/* 各日の背景を白と薄いグレーの交互に */
+/* 各日の背景を白とごく薄いグレーの交互に */
 .day-column.alt {
-  background: #f1f0ee;
+  background: #f5f4f2;
 }
 
 .day-head:last-child {
   border-right: 1px solid var(--border);
 }
 
-.day-column.today {
-  background: #fbfcfe;
+/* 今日は縞模様より優先して淡い青一色（グレーと混ざった中間色を作らない） */
+.day-column.today,
+.day-column.alt.today {
+  background: #eaf3fc;
 }
 
 /* 罫線: 正時=実線 / 30分=細かい破線（Outlook 風）。
@@ -747,7 +749,7 @@ button {
 }
 
 .month-cell.alt {
-  background: #f1f0ee;
+  background: #f5f4f2;
 }
 
 .month-cell.outside {
@@ -2043,6 +2045,7 @@ button {
 .kanban-column-header {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
 }
 
@@ -2190,13 +2193,13 @@ button {
 }
 
 .gantt-left {
-  width: 380px;
+  width: 300px;
   flex: none;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-  padding: 6px 10px;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 8px;
   border-right: 1px solid var(--border);
   position: sticky;
   left: 0;
@@ -2204,38 +2207,11 @@ button {
   z-index: 2;
 }
 
-.gantt-left-main {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.gantt-left-dates {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding-left: 28px;
-}
-
-.gantt-left-dates.child {
-  padding-left: 32px;
-}
-
-.gantt-derived-note {
-  font-size: 10px;
-  color: var(--text-3);
-  white-space: nowrap;
-  flex: none;
-}
-
 .gantt-left-head {
-  flex-direction: row;
-  align-items: center;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-2);
-  min-height: 34px;
+  min-height: 24px;
 }
 
 .gantt-row.ticket .gantt-left {
@@ -2276,49 +2252,69 @@ button {
   letter-spacing: 0.02em;
 }
 
-.gantt-date-input {
-  flex: none;
-  width: 112px;
-  font-family: inherit;
-  font-size: 10.5px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  padding: 1px 2px;
-  color: var(--text-2);
-  background: transparent;
-}
-
-.gantt-date-input.empty {
-  color: var(--text-3);
-  opacity: 0.55;
-}
-
-.gantt-date-input:hover,
-.gantt-date-input:focus {
-  border-color: var(--border-strong);
-  background: var(--bg);
-  outline: none;
-}
-
-.gantt-date-sep {
-  font-size: 10px;
-  color: var(--text-3);
-  flex: none;
-}
-
 .gantt-timeline {
   position: relative;
   flex: none;
-  min-height: 52px;
+  min-height: 30px;
   background-image: repeating-linear-gradient(
     to right,
     var(--border) 0 1px,
-    transparent 1px 42px
+    transparent 1px 30px
   );
 }
 
-.gantt-header-row .gantt-timeline {
+.gantt-row-timeline {
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.gantt-months {
+  min-height: 24px;
   background: var(--panel);
+}
+
+.gantt-days {
+  display: flex;
+  min-height: 30px;
+  background: var(--panel);
+  background-image: none;
+}
+
+.gantt-day-cell {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--text-2);
+  border-left: 1px solid var(--border);
+}
+
+.gantt-day-cell:first-child {
+  border-left: none;
+}
+
+.gantt-day-cell.sun {
+  color: #d25555;
+}
+
+.gantt-day-cell.sat {
+  color: var(--accent);
+}
+
+.gantt-day-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+}
+
+.gantt-day-num.today {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
 }
 
 .gantt-month {
@@ -2338,14 +2334,20 @@ button {
 
 .gantt-bar {
   position: absolute;
-  top: 17px;
+  top: 6px;
   height: 18px;
   border-radius: 9px;
   opacity: 0.9;
+  pointer-events: none;
 }
 
 .gantt-bar.derived {
   opacity: 0.35;
+}
+
+.gantt-bar.preview {
+  opacity: 0.55;
+  outline: 1.5px dashed rgba(55, 53, 47, 0.35);
 }
 
 .gantt-today-line {
@@ -2373,32 +2375,30 @@ button {
   color: var(--text-3);
 }
 
-.gantt-estimate {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 10.5px;
-  color: var(--text-3);
-  flex: none;
+.gantt-add-left {
+  min-height: 30px;
 }
 
-.gantt-estimate-input {
-  width: 44px;
-  font-family: inherit;
-  font-size: 10.5px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  padding: 1px 3px;
-  color: var(--text-2);
+.gantt-add-btn {
+  border: none;
   background: transparent;
-  text-align: right;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-3);
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
 }
 
-.gantt-estimate-input:hover,
-.gantt-estimate-input:focus {
-  border-color: var(--border-strong);
-  background: var(--bg);
-  outline: none;
+.gantt-add-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.gantt-add-input {
+  font-size: 12px;
+  padding: 3px 6px;
 }
 
 .gantt-del {
@@ -2412,6 +2412,95 @@ button {
 .settings-week-start {
   width: 140px;
   flex: none;
+}
+
+.settings-gantt-offset {
+  width: 64px;
+  flex: none;
+}
+
+.settings-value-unit {
+  font-size: 12px;
+  color: var(--text-2);
+  flex: none;
+}
+
+/* ---------- チケット画面の分類サイドバー ---------- */
+
+.tickets-layout {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.tickets-side {
+  width: 150px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 2px;
+}
+
+.tickets-side-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-2);
+  text-align: left;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.tickets-side-item:hover {
+  background: var(--hover);
+}
+
+.tickets-side-item.active {
+  background: var(--hover);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tickets-side-item.add {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.tickets-main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- ブラウザで開かれた場合の案内 ---------- */
+
+.browser-notice {
+  max-width: 560px;
+  margin: 15vh auto 0;
+  text-align: center;
+  color: var(--text);
+}
+
+.browser-notice h1 {
+  font-size: 22px;
+  color: var(--accent);
+}
+
+.browser-notice p {
+  font-size: 14px;
+  line-height: 2;
+  color: var(--text-2);
+}
+
+.browser-notice code {
+  background: var(--panel);
+  border-radius: 4px;
+  padding: 2px 6px;
 }
 
 /* ---------- 幅の上書き ----------

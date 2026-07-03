@@ -5,6 +5,7 @@ export const SETTING_KEYS = {
   lastBackupAt: "last_backup_at",
   notesDir: "notes_dir",
   weekStartsOn: "week_starts_on",
+  ganttStartOffsetDays: "gantt_start_offset_days",
 } as const;
 
 export async function getSetting(key: string): Promise<string | null> {

@@ -5,12 +5,17 @@ import { TASK_STATUSES } from "../../lib/status";
 import { UNCATEGORIZED_COLOR } from "../../lib/summary";
 import { addMinutes, formatHours, startOfDay, toLocalIso } from "../../lib/dates";
 
+interface KanbanBoardProps {
+  /** null = すべて表示。カテゴリ ID で絞り込み */
+  filterCategoryId: string | null;
+}
+
 /**
  * Notion 風のカンバンボード。
  * 子を持つチケットは「入れ物」なので表示せず、作業単位（子タスクと
  * 子を持たないチケット）をカードとして扱う。
  */
-export function KanbanBoard() {
+export function KanbanBoard({ filterCategoryId }: KanbanBoardProps) {
   const tasks = useAppStore((s) => s.tasks);
   const categories = useAppStore((s) => s.categories);
   const actualMinutes = useAppStore((s) => s.taskActualMinutes);
@@ -34,8 +39,13 @@ export function KanbanBoard() {
   );
 
   const cards = useMemo(
-    () => tasks.filter((t) => !parentIds.has(t.id)),
-    [tasks, parentIds],
+    () =>
+      tasks.filter(
+        (t) =>
+          !parentIds.has(t.id) &&
+          (filterCategoryId === null || t.categoryId === filterCategoryId),
+      ),
+    [tasks, parentIds, filterCategoryId],
   );
 
   const byStatus = useMemo(() => {
@@ -57,7 +67,7 @@ export function KanbanBoard() {
     const title = newTitle.trim();
     if (title !== "") {
       // ボードから作るものは独立した作業単位（チケット）として登録する
-      void addTask(title, null, null).then(() => {
+      void addTask(title, filterCategoryId, null).then(() => {
         const created = useAppStore.getState().tasks.find(
           (t) => t.title === title && t.parentId === null && t.status === "todo",
         );

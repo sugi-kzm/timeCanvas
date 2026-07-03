@@ -151,6 +151,8 @@ function CategoriesTab() {
 function DisplayTab() {
   const weekStartsOn = useAppStore((s) => s.weekStartsOn);
   const setWeekStartsOn = useAppStore((s) => s.setWeekStartsOn);
+  const ganttStartOffsetDays = useAppStore((s) => s.ganttStartOffsetDays);
+  const setGanttStartOffsetDays = useAppStore((s) => s.setGanttStartOffsetDays);
 
   return (
     <div className="settings-body">
@@ -169,6 +171,19 @@ function DisplayTab() {
       <p className="settings-hint">
         週カレンダー・月カレンダー・ミニカレンダー・年間ヒートマップの並びに反映されます。
       </p>
+      <h3 className="settings-heading">ガントチャート</h3>
+      <div className="settings-row">
+        <span className="settings-value">開始位置：今日の</span>
+        <input
+          type="number"
+          className="text-input settings-gantt-offset"
+          min={0}
+          max={60}
+          value={ganttStartOffsetDays}
+          onChange={(e) => void setGanttStartOffsetDays(Number(e.target.value))}
+        />
+        <span className="settings-value-unit">日前から表示</span>
+      </div>
     </div>
   );
 }

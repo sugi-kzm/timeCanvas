@@ -38,28 +38,39 @@ export interface GanttRange {
   totalDays: number;
 }
 
-const MIN_SPAN_DAYS = 42;
-const PAD_BEFORE_DAYS = 7;
-const PAD_AFTER_DAYS = 14;
+/** 開始位置の既定: 今日の 3 日前から表示する */
+export const DEFAULT_GANTT_START_OFFSET_DAYS = 3;
+const MIN_FORWARD_DAYS = 27;
+const PAD_AFTER_DAYS = 7;
 
-/** 全バーが収まる表示範囲（前後に余白、最低 6 週間） */
-export function computeGanttRange(spans: readonly GanttSpan[], today: Date): GanttRange {
+/**
+ * 表示範囲。開始は「今日 - startOffsetDays」で固定し、
+ * 終了はすべてのバーが収まるところ + 余白（最低でも今日から4週間先まで）。
+ */
+export function computeGanttRange(
+  spans: readonly GanttSpan[],
+  today: Date,
+  startOffsetDays: number = DEFAULT_GANTT_START_OFFSET_DAYS,
+): GanttRange {
   const day = startOfDay(today);
-  let min = day;
-  let max = day;
+  const from = addDays(day, -startOffsetDays);
+  let max = addDays(day, MIN_FORWARD_DAYS);
   for (const span of spans) {
-    const s = fromLocalIso(span.start);
     const e = fromLocalIso(span.end);
-    if (s < min) min = s;
     if (e > max) max = e;
   }
-  let from = addDays(startOfDay(min), -PAD_BEFORE_DAYS);
-  let to = addDays(startOfDay(max), PAD_AFTER_DAYS);
-  const days = dayDiff(from, to) + 1;
-  if (days < MIN_SPAN_DAYS) {
-    to = addDays(from, MIN_SPAN_DAYS - 1);
-  }
+  const to = addDays(startOfDay(max), PAD_AFTER_DAYS);
   return { from, to, totalDays: dayDiff(from, to) + 1 };
+}
+
+/** ヘッダの日セル（1日 = 1マス） */
+export function dayCells(range: GanttRange): Date[] {
+  return Array.from({ length: range.totalDays }, (_, i) => addDays(range.from, i));
+}
+
+/** 範囲先頭からのオフセット（日）を日付文字列にする */
+export function offsetToDate(range: GanttRange, offsetDays: number): string {
+  return toDateString(addDays(range.from, offsetDays));
 }
 
 /** 2つの日付の差（日数、b - a） */
