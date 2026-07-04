@@ -3,7 +3,7 @@ name = "timecanvas"
 version = "0.1.0"
 description = "Private local time tracking app"
 authors = ["kazuma"]
-license = "BSD-3-Clause"
+license = "MIT"
 edition = "2021"
 
 [lib]

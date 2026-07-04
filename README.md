@@ -87,4 +87,4 @@ Windows 用インストーラー（`.msi` / `.exe`）は [Releases](../../releas
 
 ## ライセンス
 
-[BSD 3-Clause License](LICENSE)
+[MIT License](LICENSE)
