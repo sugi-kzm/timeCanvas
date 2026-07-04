@@ -74,3 +74,17 @@ src-tauri/
 | Phase 2 | タスク管理（TODO・見積⇔実績）、エントリ検索（Ctrl+F） | 実装済み |
 | Phase 3 | 分析（カテゴリ別集計、見積 vs 実績、年間ヒートマップ） | 実装済み |
 | Phase 4 | ノート（Markdown ナレッジベース、全文検索） | 実装済み |
+
+## リリース
+
+Windows 用インストーラー（`.msi` / `.exe`）は [Releases](../../releases) ページから
+ダウンロードできる。ビルド・配布の仕組みは [docs/release-process.md](docs/release-process.md) を参照。
+
+## コントリビュート
+
+バグ報告・機能要望は [Issues](../../issues) へ。開発への参加方法は
+[CONTRIBUTING.md](CONTRIBUTING.md) を参照。
+
+## ライセンス
+
+[BSD 3-Clause License](LICENSE)
