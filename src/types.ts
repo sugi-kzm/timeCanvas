@@ -33,6 +33,17 @@ export interface NewEntryInput {
 export type TaskStatus = "todo" | "in_progress" | "review" | "done";
 
 /**
+ * チケットの分類（スケジュールのカテゴリとは独立した軸）。
+ * 例: 「自学習」「プロジェクト」など、チケット画面の左レールで使う。
+ */
+export interface TicketGroup {
+  id: string;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+}
+
+/**
  * チケットとタスクの両方を表す。
  * parentId が null のものは「チケット」（大きな作業単位・ゴール）、
  * parentId を持つものはチケット配下の「タスク」（細分化した作業）。
@@ -42,6 +53,8 @@ export interface Task {
   title: string;
   memo: string;
   categoryId: string | null;
+  /** チケットの分類（自学習・プロジェクト等）。カテゴリとは別軸 */
+  groupId: string | null;
   /** 見積時間（分）。未設定は null */
   estimateMinutes: number | null;
   status: TaskStatus;

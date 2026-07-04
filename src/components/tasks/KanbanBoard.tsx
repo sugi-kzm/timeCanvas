@@ -1,51 +1,58 @@
 import { useMemo, useState } from "react";
 import { useAppStore } from "../../store/appStore";
+import { confirmDialog } from "../../store/confirmStore";
 import type { Task, TaskStatus } from "../../types";
 import { TASK_STATUSES } from "../../lib/status";
 import { UNCATEGORIZED_COLOR } from "../../lib/summary";
 import { addMinutes, formatHours, startOfDay, toLocalIso } from "../../lib/dates";
 
+/** 完了カードは当月中に完了したものだけ表示する（月が変われば自然に消える） */
+function completedThisMonth(task: Task, now: Date): boolean {
+  if (task.status !== "done") return true;
+  if (task.completedAt === null) return true;
+  const completed = new Date(task.completedAt);
+  return completed.getFullYear() === now.getFullYear() && completed.getMonth() === now.getMonth();
+}
+
 interface KanbanBoardProps {
-  /** null = すべて表示。カテゴリ ID で絞り込み */
-  filterCategoryId: string | null;
+  /** null = すべて表示。分類 ID で絞り込み */
+  filterGroupId: string | null;
 }
 
 /**
  * Notion 風のカンバンボード。
- * 子を持つチケットは「入れ物」なので表示せず、作業単位（子タスクと
- * 子を持たないチケット）をカードとして扱う。
+ * ここに載るのは実際の作業単位である「子タスク」のみ。
+ * チケット（親）そのものや新規チケットの作成は「チケット」タブで行う。
  */
-export function KanbanBoard({ filterCategoryId }: KanbanBoardProps) {
+export function KanbanBoard({ filterGroupId }: KanbanBoardProps) {
   const tasks = useAppStore((s) => s.tasks);
   const categories = useAppStore((s) => s.categories);
   const actualMinutes = useAppStore((s) => s.taskActualMinutes);
   const moveTaskStatus = useAppStore((s) => s.moveTaskStatus);
-  const addTask = useAppStore((s) => s.addTask);
   const removeTask = useAppStore((s) => s.removeTask);
   const openEditor = useAppStore((s) => s.openEditor);
+  const setTasksViewMode = useAppStore((s) => s.setTasksViewMode);
 
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null);
-  const [addingStatus, setAddingStatus] = useState<TaskStatus | null>(null);
-  const [newTitle, setNewTitle] = useState("");
 
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const ticketById = useMemo(
     () => new Map(tasks.filter((t) => t.parentId === null).map((t) => [t.id, t])),
     [tasks],
   );
-  const parentIds = useMemo(
-    () => new Set(tasks.filter((t) => t.parentId !== null).map((t) => t.parentId as string)),
-    [tasks],
-  );
 
+  const now = useMemo(() => new Date(), []);
+
+  // カンバンには子タスクのみを載せる（親チケット自体は「チケット」タブで管理）
   const cards = useMemo(
     () =>
       tasks.filter(
         (t) =>
-          !parentIds.has(t.id) &&
-          (filterCategoryId === null || t.categoryId === filterCategoryId),
+          t.parentId !== null &&
+          (filterGroupId === null || t.groupId === filterGroupId) &&
+          completedThisMonth(t, now),
       ),
-    [tasks, parentIds, filterCategoryId],
+    [tasks, filterGroupId, now],
   );
 
   const byStatus = useMemo(() => {
@@ -63,21 +70,14 @@ export function KanbanBoard({ filterCategoryId }: KanbanBoardProps) {
     if (task !== undefined) void moveTaskStatus(task, status);
   };
 
-  const submitNew = (status: TaskStatus) => {
-    const title = newTitle.trim();
-    if (title !== "") {
-      // ボードから作るものは独立した作業単位（チケット）として登録する
-      void addTask(title, filterCategoryId, null).then(() => {
-        const created = useAppStore.getState().tasks.find(
-          (t) => t.title === title && t.parentId === null && t.status === "todo",
-        );
-        if (created !== undefined && status !== "todo") {
-          void moveTaskStatus(created, status);
-        }
-      });
-    }
-    setNewTitle("");
-    setAddingStatus(null);
+  const handleDelete = (card: Task) => {
+    void confirmDialog({
+      title: "タスクを削除",
+      message: `「${card.title}」を削除しますか？\n（記録済みの実績は残ります）`,
+      danger: true,
+    }).then((ok) => {
+      if (ok) void removeTask(card.id);
+    });
   };
 
   // 「レビュー中」列はカードがあるときだけ表示する（既定は To-Do / 進行中 / 完了 の3列）
@@ -102,10 +102,7 @@ export function KanbanBoard({ filterCategoryId }: KanbanBoardProps) {
             onDrop={(e) => handleDrop(status.key, e)}
           >
             <div className="kanban-column-header">
-              <span
-                className="kanban-status-chip"
-                style={{ color: status.text }}
-              >
+              <span className="kanban-status-chip" style={{ color: status.text }}>
                 <span className="kanban-status-dot" style={{ background: status.dot }} />
                 {status.label}
               </span>
@@ -134,11 +131,7 @@ export function KanbanBoard({ filterCategoryId }: KanbanBoardProps) {
                       className="kanban-card-del"
                       aria-label={`${card.title} を削除`}
                       title="削除"
-                      onClick={() => {
-                        if (window.confirm(`「${card.title}」を削除しますか？\n（記録済みの実績は残ります）`)) {
-                          void removeTask(card.id);
-                        }
-                      }}
+                      onClick={() => handleDelete(card)}
                     >
                       ×
                     </button>
@@ -164,8 +157,11 @@ export function KanbanBoard({ filterCategoryId }: KanbanBoardProps) {
                       type="button"
                       className="link-btn kanban-card-record"
                       onClick={() => {
-                        const now = new Date();
-                        const start = addMinutes(startOfDay(now), (now.getHours() + 1) * 60);
+                        const nowTime = new Date();
+                        const start = addMinutes(
+                          startOfDay(nowTime),
+                          (nowTime.getHours() + 1) * 60,
+                        );
                         openEditor({
                           mode: "create",
                           title: card.title,
@@ -181,37 +177,25 @@ export function KanbanBoard({ filterCategoryId }: KanbanBoardProps) {
                   </div>
                 );
               })}
+              {columnCards.length === 0 && (
+                <p className="kanban-empty-hint">
+                  {status.key === "todo" ? (
+                    <>
+                      「チケット」タブでタスクを追加してください
+                      <button
+                        type="button"
+                        className="link-btn"
+                        onClick={() => setTasksViewMode("tickets")}
+                      >
+                        開く →
+                      </button>
+                    </>
+                  ) : (
+                    "ここにはありません"
+                  )}
+                </p>
+              )}
             </div>
-            {addingStatus === status.key ? (
-              <input
-                type="text"
-                className="text-input kanban-add-input"
-                autoFocus
-                placeholder="タイトルを入力（Enter で追加）"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") submitNew(status.key);
-                  if (e.key === "Escape") {
-                    setNewTitle("");
-                    setAddingStatus(null);
-                  }
-                }}
-                onBlur={() => {
-                  setNewTitle("");
-                  setAddingStatus(null);
-                }}
-              />
-            ) : (
-              <button
-                type="button"
-                className="kanban-add-btn"
-                style={{ color: status.text }}
-                onClick={() => setAddingStatus(status.key)}
-              >
-                + 新規
-              </button>
-            )}
           </div>
         );
       })}

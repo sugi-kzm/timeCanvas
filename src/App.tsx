@@ -14,6 +14,7 @@ import { NotesView } from "./components/notes/NotesView";
 import { QuickCreatePopover } from "./components/calendar/QuickCreatePopover";
 import { EntryDialog } from "./components/calendar/EntryDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { runBackup, runDailyBackupIfDue } from "./db/backupService";
 
 const DAILY_BACKUP_CHECK_MS = 30 * 60 * 1000;
@@ -109,6 +110,7 @@ export default function App() {
       {quickCreate !== null && <QuickCreatePopover />}
       {editor !== null && <EntryDialog />}
       {settingsOpen && <SettingsDialog />}
+      <ConfirmDialog />
       {statusMessage !== null && (
         <div className="toast" role="status">
           {statusMessage}

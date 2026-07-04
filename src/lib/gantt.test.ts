@@ -17,6 +17,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     title: "task",
     memo: "",
     categoryId: null,
+    groupId: null,
     estimateMinutes: null,
     status: "todo",
     startDate: null,

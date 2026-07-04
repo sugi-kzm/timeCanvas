@@ -14,21 +14,24 @@ export function CategoryList() {
           編集
         </button>
       </div>
-      <ul>
-        {categories.map((c) => (
-          <li key={c.id}>
-            <label className="category-item">
-              <input
-                type="checkbox"
-                checked={!hiddenIds.includes(c.id)}
-                onChange={() => toggleHidden(c.id)}
-              />
+      <div className="category-chip-row">
+        {categories.map((c) => {
+          const hidden = hiddenIds.includes(c.id);
+          return (
+            <button
+              key={c.id}
+              type="button"
+              className={`category-chip ${hidden ? "hidden" : ""}`}
+              aria-pressed={!hidden}
+              title={hidden ? `${c.name} を表示` : `${c.name} を非表示`}
+              onClick={() => toggleHidden(c.id)}
+            >
               <span className="category-dot" style={{ background: c.color }} />
               <span className="category-name">{c.name}</span>
-            </label>
-          </li>
-        ))}
-      </ul>
+            </button>
+          );
+        })}
+      </div>
     </section>
   );
 }

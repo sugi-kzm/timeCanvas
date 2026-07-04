@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { marked } from "marked";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useAppStore } from "../../store/appStore";
+import { confirmDialog } from "../../store/confirmStore";
 import {
   createNoteDir,
   deleteNotePath,
@@ -15,7 +16,7 @@ import {
   type NoteNode,
   type NoteSearchHit,
 } from "../../db/notesService";
-import { IconChevronRight, IconClose, IconDoc, IconFolder, IconPlus } from "../icons";
+import { IconChevronRight, IconDoc, IconFolder, IconPlus } from "../icons";
 
 const AUTOSAVE_DELAY_MS = 800;
 
@@ -33,6 +34,29 @@ function displayName(name: string): string {
   return name.replace(/\.md$/i, "");
 }
 
+function dirOf(path: string): string {
+  const idx = path.lastIndexOf("/");
+  return idx === -1 ? "" : path.slice(0, idx);
+}
+
+interface PendingNew {
+  kind: "note" | "folder";
+  /** 作成先ディレクトリ（ルートは "" ） */
+  dir: string;
+}
+
+interface RenameState {
+  path: string;
+  kind: "note" | "folder";
+}
+
+interface ContextMenuState {
+  path: string;
+  kind: "note" | "folder";
+  x: number;
+  y: number;
+}
+
 export function NotesView() {
   const setStatus = useAppStore((s) => s.setStatus);
 
@@ -40,11 +64,15 @@ export function NotesView() {
   const [tree, setTree] = useState<NoteNode[]>([]);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [activePath, setActivePath] = useState<string | null>(null);
   const [content, setContent] = useState("");
   const [dirty, setDirty] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [hits, setHits] = useState<NoteSearchHit[]>([]);
+  const [pendingNew, setPendingNew] = useState<PendingNew | null>(null);
+  const [renaming, setRenaming] = useState<RenameState | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   const contentRef = useRef(content);
   contentRef.current = content;
@@ -100,86 +128,113 @@ export function NotesView() {
     };
   }, [saveCurrent]);
 
-  const openNote = async (path: string) => {
+  /** 既存ノートを開く。既定はプレビュー表示（A4） */
+  const openNote = async (path: string, opts: { editByDefault?: boolean } = {}) => {
     if (root === null) return;
     await saveCurrent();
     try {
       const text = await readNote(root, path);
       setSelectedPath(path);
+      setActivePath(path);
       setContent(text);
       setDirty(false);
-      setPreviewMode(false);
+      setPreviewMode(!(opts.editByDefault ?? false));
     } catch (e) {
       setStatus(`ノートを開けませんでした: ${String(e)}`);
     }
   };
 
-  const selectedDir = useMemo(() => {
-    if (selectedPath === null) return "";
-    const idx = selectedPath.lastIndexOf("/");
-    return idx === -1 ? "" : selectedPath.slice(0, idx);
-  }, [selectedPath]);
+  // ---------- 新規作成（ツリーに直接インラインで名前入力） ----------
 
-  const createNote = async () => {
-    if (root === null) return;
-    const name = window.prompt("ノート名を入力してください（例: 経費精算のやり方）");
-    if (name === null || name.trim() === "") return;
-    const safe = name.trim().replaceAll("/", "-");
-    const rel = selectedDir === "" ? `${safe}.md` : `${selectedDir}/${safe}.md`;
+  const beginCreate = (kind: "note" | "folder") => {
+    // 直近でフォルダを選んでいればそこに、なければ開いているノートのフォルダに、
+    // どちらもなければルートに作成する
+    const dir =
+      activePath !== null && activePath !== selectedPath
+        ? activePath
+        : selectedPath !== null
+          ? dirOf(selectedPath)
+          : "";
+    if (dir !== "") setExpanded((prev) => new Set([...prev, dir]));
+    setPendingNew({ kind, dir });
+  };
+
+  const commitCreate = async (dir: string, kind: "note" | "folder", rawName: string) => {
+    setPendingNew(null);
+    const name = rawName.trim();
+    if (root === null || name === "") return;
+    const safe = name.replaceAll("/", "-");
+    const rel = dir === "" ? safe : `${dir}/${safe}`;
     try {
-      await writeNote(root, rel, `# ${safe}\n\n`);
-      await reloadTree(root);
-      await openNote(rel);
+      if (kind === "note") {
+        const relMd = `${rel}.md`;
+        await writeNote(root, relMd, `# ${safe}\n\n`);
+        await reloadTree(root);
+        await openNote(relMd, { editByDefault: true });
+      } else {
+        await createNoteDir(root, rel);
+        await reloadTree(root);
+        setExpanded((prev) => new Set([...prev, rel]));
+        setActivePath(rel);
+      }
     } catch (e) {
-      setStatus(`ノートの作成に失敗しました: ${String(e)}`);
+      setStatus(`作成に失敗しました: ${String(e)}`);
     }
   };
 
-  const createFolder = async () => {
-    if (root === null) return;
-    const name = window.prompt("フォルダ名を入力してください");
-    if (name === null || name.trim() === "") return;
-    const safe = name.trim().replaceAll("/", "-");
-    const rel = selectedDir === "" ? safe : `${selectedDir}/${safe}`;
-    try {
-      await createNoteDir(root, rel);
-      await reloadTree(root);
-      setExpanded((prev) => new Set([...prev, rel]));
-    } catch (e) {
-      setStatus(`フォルダの作成に失敗しました: ${String(e)}`);
-    }
+  // ---------- 名前変更（選択中の項目を再クリック / コンテキストメニュー） ----------
+
+  const startRename = (path: string, kind: "note" | "folder") => {
+    setContextMenu(null);
+    setRenaming({ path, kind });
   };
 
-  const renameSelected = async () => {
-    if (root === null || selectedPath === null) return;
-    const current = selectedPath.split("/").pop() ?? "";
-    const name = window.prompt("新しい名前", displayName(current));
-    if (name === null || name.trim() === "") return;
-    const safe = name.trim().replaceAll("/", "-");
-    const to = selectedDir === "" ? `${safe}.md` : `${selectedDir}/${safe}.md`;
-    if (to === selectedPath) return;
+  const commitRename = async (state: RenameState, rawName: string) => {
+    setRenaming(null);
+    if (root === null) return;
+    const name = rawName.trim();
+    if (name === "") return;
+    const safe = name.replaceAll("/", "-");
+    const dir = dirOf(state.path);
+    const to = state.kind === "note" ? `${dir === "" ? "" : `${dir}/`}${safe}.md` : `${dir === "" ? "" : `${dir}/`}${safe}`;
+    if (to === state.path) return;
     try {
-      await saveCurrent();
-      await renameNotePath(root, selectedPath, to);
+      if (state.kind === "note" && state.path === selectedPath) await saveCurrent();
+      await renameNotePath(root, state.path, to);
       await reloadTree(root);
-      setSelectedPath(to);
+      if (state.path === selectedPath) setSelectedPath(to);
+      if (state.path === activePath) setActivePath(to);
     } catch (e) {
       setStatus(`名前の変更に失敗しました: ${String(e)}`);
     }
   };
 
-  const deleteSelected = async () => {
-    if (root === null || selectedPath === null) return;
-    if (!window.confirm(`「${displayName(selectedPath)}」を削除しますか？`)) return;
-    try {
-      await deleteNotePath(root, selectedPath);
-      setSelectedPath(null);
-      setContent("");
-      setDirty(false);
-      await reloadTree(root);
-    } catch (e) {
-      setStatus(`削除に失敗しました: ${String(e)}`);
-    }
+  // ---------- 削除（コンテキストメニュー） ----------
+
+  const deletePath = (path: string, kind: "note" | "folder") => {
+    setContextMenu(null);
+    void confirmDialog({
+      title: kind === "note" ? "ノートを削除" : "フォルダを削除",
+      message:
+        kind === "folder"
+          ? `フォルダ「${displayName(path.split("/").pop() ?? path)}」と中身をすべて削除しますか？`
+          : `「${displayName(path.split("/").pop() ?? path)}」を削除しますか？`,
+      danger: true,
+    }).then(async (ok) => {
+      if (!ok || root === null) return;
+      try {
+        await deleteNotePath(root, path);
+        if (selectedPath === path || (kind === "folder" && selectedPath?.startsWith(`${path}/`))) {
+          setSelectedPath(null);
+          setContent("");
+          setDirty(false);
+        }
+        if (activePath === path) setActivePath(null);
+        await reloadTree(root);
+      } catch (e) {
+        setStatus(`削除に失敗しました: ${String(e)}`);
+      }
+    });
   };
 
   const changeRoot = async () => {
@@ -189,6 +244,7 @@ export function NotesView() {
     await setNotesRoot(dir);
     setRoot(dir);
     setSelectedPath(null);
+    setActivePath(null);
     setContent("");
     await reloadTree(dir);
   };
@@ -215,32 +271,111 @@ export function NotesView() {
       return next;
     });
 
-  const renderNodes = (nodes: NoteNode[], depth: number) => (
+  const handleFolderClick = (path: string) => {
+    if (activePath === path) {
+      startRename(path, "folder");
+      return;
+    }
+    setActivePath(path);
+    toggleExpand(path);
+  };
+
+  const handleFileClick = (path: string) => {
+    if (activePath === path && selectedPath === path) {
+      startRename(path, "note");
+      return;
+    }
+    void openNote(path);
+  };
+
+  const renderInlineInput = (
+    defaultValue: string,
+    onCommit: (value: string) => void,
+    onCancel: () => void,
+  ) => (
+    <input
+      type="text"
+      className="note-tree-rename-input"
+      defaultValue={defaultValue}
+      autoFocus
+      onFocus={(e) => e.target.select()}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") onCommit(e.currentTarget.value);
+        if (e.key === "Escape") onCancel();
+      }}
+      onBlur={(e) => onCommit(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+    />
+  );
+
+  const renderNodes = (nodes: NoteNode[], depth: number, dirPath: string) => (
     <ul className="note-tree" style={{ paddingLeft: depth === 0 ? 0 : 14 }}>
       {nodes.map((node) => (
         <li key={node.path}>
           {node.kind === "dir" ? (
             <>
-              <button
-                type="button"
-                className="note-tree-row dir"
-                onClick={() => toggleExpand(node.path)}
-              >
-                <span className={`tree-caret ${expanded.has(node.path) ? "open" : ""}`}>
-                  <IconChevronRight size={12} />
-                </span>
-                <span className="note-tree-icon">
-                  <IconFolder size={14} />
-                </span>
-                <span className="note-tree-name">{node.name}</span>
-              </button>
-              {expanded.has(node.path) && renderNodes(node.children, depth + 1)}
+              {renaming?.path === node.path ? (
+                <div className="note-tree-row dir renaming">
+                  <span className="tree-caret" aria-hidden="true">
+                    <IconChevronRight size={12} />
+                  </span>
+                  <span className="note-tree-icon">
+                    <IconFolder size={14} />
+                  </span>
+                  {renderInlineInput(
+                    node.name,
+                    (v) => void commitRename(renaming, v),
+                    () => setRenaming(null),
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className={`note-tree-row dir ${activePath === node.path ? "active" : ""}`}
+                  onClick={() => handleFolderClick(node.path)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setContextMenu({ path: node.path, kind: "folder", x: e.clientX, y: e.clientY });
+                  }}
+                >
+                  <span
+                    className={`tree-caret ${expanded.has(node.path) ? "open" : ""}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleExpand(node.path);
+                    }}
+                  >
+                    <IconChevronRight size={12} />
+                  </span>
+                  <span className="note-tree-icon">
+                    <IconFolder size={14} />
+                  </span>
+                  <span className="note-tree-name">{node.name}</span>
+                </button>
+              )}
+              {expanded.has(node.path) && renderNodes(node.children, depth + 1, node.path)}
             </>
+          ) : renaming?.path === node.path ? (
+            <div className="note-tree-row file renaming">
+              <span className="note-tree-icon">
+                <IconDoc size={14} />
+              </span>
+              {renderInlineInput(
+                displayName(node.name),
+                (v) => void commitRename(renaming, v),
+                () => setRenaming(null),
+              )}
+            </div>
           ) : (
             <button
               type="button"
               className={`note-tree-row file ${node.path === selectedPath ? "active" : ""}`}
-              onClick={() => void openNote(node.path)}
+              onClick={() => handleFileClick(node.path)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenu({ path: node.path, kind: "note", x: e.clientX, y: e.clientY });
+              }}
             >
               <span className="note-tree-icon">
                 <IconDoc size={14} />
@@ -250,7 +385,26 @@ export function NotesView() {
           )}
         </li>
       ))}
+      {pendingNew !== null && pendingNew.dir === dirPath && <li>{renderGhostRow(pendingNew)}</li>}
     </ul>
+  );
+
+  const renderGhostRow = (pending: PendingNew) => (
+    <div className={`note-tree-row ${pending.kind === "folder" ? "dir" : "file"} renaming`}>
+      {pending.kind === "folder" ? (
+        <span className="tree-caret" aria-hidden="true">
+          <IconChevronRight size={12} />
+        </span>
+      ) : null}
+      <span className="note-tree-icon">
+        {pending.kind === "folder" ? <IconFolder size={14} /> : <IconDoc size={14} />}
+      </span>
+      {renderInlineInput(
+        pending.kind === "folder" ? "新しいフォルダ" : "新しいノート",
+        (v) => void commitCreate(pending.dir, pending.kind, v),
+        () => setPendingNew(null),
+      )}
+    </div>
   );
 
   return (
@@ -264,7 +418,7 @@ export function NotesView() {
             className="ghost-icon-btn"
             title="新しいノート"
             aria-label="新しいノート"
-            onClick={() => void createNote()}
+            onClick={() => beginCreate("note")}
           >
             <IconPlus size={14} />
           </button>
@@ -273,7 +427,7 @@ export function NotesView() {
             className="ghost-icon-btn"
             title="新しいフォルダ"
             aria-label="新しいフォルダ"
-            onClick={() => void createFolder()}
+            onClick={() => beginCreate("folder")}
           >
             <IconFolder size={14} />
           </button>
@@ -305,7 +459,7 @@ export function NotesView() {
             ))}
           </ul>
         ) : (
-          renderNodes(tree, 0)
+          renderNodes(tree, 0, "")
         )}
         <div className="notes-root-row" title={root ?? ""}>
           <span className="notes-root-path">{root ?? "..."}</span>
@@ -317,7 +471,7 @@ export function NotesView() {
       <div className="notes-main">
         {selectedPath === null ? (
           <div className="placeholder-view">
-            <p>左のツリーからノートを選ぶか、「+ ノート」で作成してください</p>
+            <p>左のツリーからノートを選ぶか、「+」で作成してください</p>
           </div>
         ) : (
           <>
@@ -346,18 +500,6 @@ export function NotesView() {
                   プレビュー
                 </button>
               </div>
-              <button type="button" className="btn" onClick={() => void renameSelected()}>
-                名前変更
-              </button>
-              <button
-                type="button"
-                className="btn icon-btn danger"
-                aria-label="削除"
-                title="削除"
-                onClick={() => void deleteSelected()}
-              >
-                <IconClose size={15} />
-              </button>
             </div>
             {previewMode ? (
               <div
@@ -380,6 +522,32 @@ export function NotesView() {
           </>
         )}
       </div>
+      {contextMenu !== null && (
+        <>
+          <div className="popover-backdrop" onPointerDown={() => setContextMenu(null)} />
+          <div
+            className="note-context-menu"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            role="menu"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => startRename(contextMenu.path, contextMenu.kind)}
+            >
+              名前を変更
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="danger"
+              onClick={() => deletePath(contextMenu.path, contextMenu.kind)}
+            >
+              削除
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

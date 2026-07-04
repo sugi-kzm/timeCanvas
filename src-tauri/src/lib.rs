@@ -115,6 +115,21 @@ fn migrations() -> Vec<Migration> {
         ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 5,
+            description: "add_ticket_groups",
+            sql: "
+            CREATE TABLE IF NOT EXISTS ticket_groups (
+                id          TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                sort_order  INTEGER NOT NULL DEFAULT 0,
+                created_at  TEXT NOT NULL
+            );
+            ALTER TABLE tasks ADD COLUMN group_id TEXT REFERENCES ticket_groups(id);
+            CREATE INDEX IF NOT EXISTS idx_tasks_group ON tasks(group_id);
+        ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

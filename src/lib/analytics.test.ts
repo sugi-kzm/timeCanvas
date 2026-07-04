@@ -35,6 +35,7 @@ function makeTask(
     title: `task-${id}`,
     memo: "",
     categoryId,
+    groupId: null,
     estimateMinutes,
     status,
     startDate: null,

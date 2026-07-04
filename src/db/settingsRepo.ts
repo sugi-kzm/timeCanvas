@@ -6,6 +6,7 @@ export const SETTING_KEYS = {
   notesDir: "notes_dir",
   weekStartsOn: "week_starts_on",
   ganttStartOffsetDays: "gantt_start_offset_days",
+  ganttMinLeftPaneWidth: "gantt_min_left_pane_width",
 } as const;
 
 export async function getSetting(key: string): Promise<string | null> {

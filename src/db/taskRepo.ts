@@ -8,6 +8,7 @@ interface TaskRow {
   title: string;
   memo: string;
   category_id: string | null;
+  group_id: string | null;
   estimate_minutes: number | null;
   status: string;
   due_date: string | null;
@@ -25,6 +26,7 @@ function rowToTask(row: TaskRow): Task {
     title: row.title,
     memo: row.memo,
     categoryId: row.category_id,
+    groupId: row.group_id,
     estimateMinutes: row.estimate_minutes,
     status: normalizeStatus(row.status),
     startDate: row.start_date,
@@ -49,7 +51,7 @@ export async function listTasks(): Promise<Task[]> {
     `SELECT * FROM tasks
      WHERE status = 'done'
      ORDER BY completed_at DESC
-     LIMIT 100`,
+     LIMIT 300`,
   );
   return [...rows, ...doneRows].map(rowToTask);
 }
@@ -58,6 +60,7 @@ export async function createTask(
   title: string,
   categoryId: string | null,
   parentId: string | null = null,
+  groupId: string | null = null,
 ): Promise<Task> {
   const db = await getDb();
   const now = toLocalIso(new Date());
@@ -69,6 +72,7 @@ export async function createTask(
     title,
     memo: "",
     categoryId,
+    groupId,
     estimateMinutes: null,
     status: "todo",
     startDate: null,
@@ -80,13 +84,14 @@ export async function createTask(
     completedAt: null,
   };
   await db.execute(
-    `INSERT INTO tasks (id, title, memo, category_id, estimate_minutes, status, due_date, parent_id, start_date, sort_order, created_at, updated_at, completed_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+    `INSERT INTO tasks (id, title, memo, category_id, group_id, estimate_minutes, status, due_date, parent_id, start_date, sort_order, created_at, updated_at, completed_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
     [
       task.id,
       task.title,
       task.memo,
       task.categoryId,
+      task.groupId,
       task.estimateMinutes,
       task.status,
       task.dueDate,
@@ -106,14 +111,15 @@ export async function updateTask(task: Task): Promise<Task> {
   const updated: Task = { ...task, updatedAt: toLocalIso(new Date()) };
   await db.execute(
     `UPDATE tasks
-     SET title = $1, memo = $2, category_id = $3, estimate_minutes = $4,
-         status = $5, due_date = $6, parent_id = $7, start_date = $8, sort_order = $9,
-         updated_at = $10, completed_at = $11
-     WHERE id = $12`,
+     SET title = $1, memo = $2, category_id = $3, group_id = $4, estimate_minutes = $5,
+         status = $6, due_date = $7, parent_id = $8, start_date = $9, sort_order = $10,
+         updated_at = $11, completed_at = $12
+     WHERE id = $13`,
     [
       updated.title,
       updated.memo,
       updated.categoryId,
+      updated.groupId,
       updated.estimateMinutes,
       updated.status,
       updated.dueDate,

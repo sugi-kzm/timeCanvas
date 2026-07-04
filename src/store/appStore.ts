@@ -5,6 +5,7 @@ import type {
   NewEntryInput,
   Task,
   TaskStatus,
+  TicketGroup,
   TimeEntry,
   ViewKind,
 } from "../types";
@@ -18,6 +19,7 @@ import {
 import * as categoryRepo from "../db/categoryRepo";
 import * as entryRepo from "../db/entryRepo";
 import * as taskRepo from "../db/taskRepo";
+import * as ticketGroupRepo from "../db/ticketGroupRepo";
 import { getSetting, setSetting, SETTING_KEYS } from "../db/settingsRepo";
 
 export interface QuickCreateState {
@@ -41,7 +43,7 @@ export type EditorState =
     }
   | { mode: "edit"; entry: TimeEntry };
 
-export type TasksViewMode = "board" | "gantt";
+export type TasksViewMode = "tickets" | "board" | "gantt" | "history";
 
 interface AppState {
   view: ViewKind;
@@ -51,16 +53,20 @@ interface AppState {
   entries: TimeEntry[];
   categories: Category[];
   tasks: Task[];
+  /** チケットの分類（スケジュールのカテゴリとは別軸。自学習・プロジェクト等） */
+  ticketGroups: TicketGroup[];
   /** タスクID → 実績合計（分） */
   taskActualMinutes: ReadonlyMap<string, number>;
   /** タスクID → 実績の期間（開始日〜最終日）。ガントで日付未設定時の表示に使う */
   taskEntryRanges: ReadonlyMap<string, taskRepo.EntryDateRange>;
-  /** チケット画面の表示モード（カンバン / ガント） */
+  /** チケット画面の表示モード（チケット / カンバン / ガント / 履歴） */
   tasksViewMode: TasksViewMode;
   /** 週の開始曜日（0=日曜, 1=月曜）。設定から変更できる */
   weekStartsOn: WeekStartsOn;
   /** ガントの開始位置（今日の何日前から表示するか）。設定から変更できる */
   ganttStartOffsetDays: number;
+  /** ガント左ペイン（チケット一覧）の最小幅(px)。設定から変更できる */
+  ganttMinLeftPaneWidth: number;
   hiddenCategoryIds: readonly string[];
   selectedEntryId: string | null;
   quickCreate: QuickCreateState | null;
@@ -96,14 +102,21 @@ interface AppState {
     title: string,
     categoryId: string | null,
     parentId?: string | null,
-  ) => Promise<void>;
+    groupId?: string | null,
+  ) => Promise<Task | null>;
   updateTask: (task: Task) => Promise<void>;
   toggleTaskDone: (task: Task) => Promise<void>;
   moveTaskStatus: (task: Task, status: TaskStatus) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
   setTasksViewMode: (mode: TasksViewMode) => void;
+
+  loadTicketGroups: () => Promise<void>;
+  addTicketGroup: (name: string) => Promise<TicketGroup | null>;
+  renameTicketGroup: (id: string, name: string) => Promise<void>;
+  removeTicketGroup: (id: string) => Promise<void>;
   setWeekStartsOn: (value: WeekStartsOn) => Promise<void>;
   setGanttStartOffsetDays: (days: number) => Promise<void>;
+  setGanttMinLeftPaneWidth: (px: number) => Promise<void>;
 
   setSearchKeyword: (keyword: string) => void;
   setSearchBoxOpen: (open: boolean) => void;
@@ -130,11 +143,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   entries: [],
   categories: [],
   tasks: [],
+  ticketGroups: [],
   taskActualMinutes: new Map(),
   taskEntryRanges: new Map(),
-  tasksViewMode: "board",
+  tasksViewMode: "tickets",
   weekStartsOn: 0,
   ganttStartOffsetDays: 3,
+  ganttMinLeftPaneWidth: 120,
   hiddenCategoryIds: [],
   selectedEntryId: null,
   quickCreate: null,
@@ -153,8 +168,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       const offsetRaw = offsetSetting === null ? NaN : Number(offsetSetting);
       const ganttStartOffsetDays =
         Number.isFinite(offsetRaw) && offsetRaw >= 0 && offsetRaw <= 60 ? offsetRaw : 3;
-      set({ categories, weekStartsOn, ganttStartOffsetDays });
-      await Promise.all([get().reloadEntries(), get().loadTasks()]);
+      const minWidthSetting = await getSetting(SETTING_KEYS.ganttMinLeftPaneWidth);
+      const minWidthRaw = minWidthSetting === null ? NaN : Number(minWidthSetting);
+      const ganttMinLeftPaneWidth =
+        Number.isFinite(minWidthRaw) && minWidthRaw >= 60 && minWidthRaw <= 600
+          ? minWidthRaw
+          : 120;
+      await ticketGroupRepo.ensureDefaultTicketGroups();
+      set({ categories, weekStartsOn, ganttStartOffsetDays, ganttMinLeftPaneWidth });
+      await Promise.all([get().reloadEntries(), get().loadTasks(), get().loadTicketGroups()]);
     } catch (e) {
       set({ statusMessage: `初期化に失敗しました: ${String(e)}` });
     }
@@ -283,12 +305,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  addTask: async (title, categoryId, parentId = null) => {
+  addTask: async (title, categoryId, parentId = null, groupId = null) => {
     try {
-      const created = await taskRepo.createTask(title, categoryId, parentId);
+      const created = await taskRepo.createTask(title, categoryId, parentId, groupId);
       set((s) => ({ tasks: [...s.tasks, created] }));
+      return created;
     } catch (e) {
       set({ statusMessage: `作成に失敗しました: ${String(e)}` });
+      return null;
     }
   },
 
@@ -327,11 +351,64 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setTasksViewMode: (mode) => set({ tasksViewMode: mode }),
 
+  loadTicketGroups: async () => {
+    try {
+      const ticketGroups = await ticketGroupRepo.listTicketGroups();
+      set({ ticketGroups });
+    } catch (e) {
+      set({ statusMessage: `分類の読み込みに失敗しました: ${String(e)}` });
+    }
+  },
+
+  addTicketGroup: async (name) => {
+    try {
+      const created = await ticketGroupRepo.createTicketGroup(name);
+      set((s) => ({ ticketGroups: [...s.ticketGroups, created] }));
+      return created;
+    } catch (e) {
+      set({ statusMessage: `分類の作成に失敗しました: ${String(e)}` });
+      return null;
+    }
+  },
+
+  renameTicketGroup: async (id, name) => {
+    try {
+      await ticketGroupRepo.renameTicketGroup(id, name);
+      set((s) => ({
+        ticketGroups: s.ticketGroups.map((g) => (g.id === id ? { ...g, name } : g)),
+      }));
+    } catch (e) {
+      set({ statusMessage: `分類の変更に失敗しました: ${String(e)}` });
+    }
+  },
+
+  removeTicketGroup: async (id) => {
+    try {
+      await ticketGroupRepo.deleteTicketGroup(id);
+      set((s) => ({
+        ticketGroups: s.ticketGroups.filter((g) => g.id !== id),
+        tasks: s.tasks.map((t) => (t.groupId === id ? { ...t, groupId: null } : t)),
+      }));
+    } catch (e) {
+      set({ statusMessage: `分類の削除に失敗しました: ${String(e)}` });
+    }
+  },
+
   setGanttStartOffsetDays: async (days) => {
     const clamped = Math.max(0, Math.min(60, Math.round(days)));
     set({ ganttStartOffsetDays: clamped });
     try {
       await setSetting(SETTING_KEYS.ganttStartOffsetDays, String(clamped));
+    } catch (e) {
+      set({ statusMessage: `設定の保存に失敗しました: ${String(e)}` });
+    }
+  },
+
+  setGanttMinLeftPaneWidth: async (px) => {
+    const clamped = Math.max(60, Math.min(600, Math.round(px)));
+    set({ ganttMinLeftPaneWidth: clamped });
+    try {
+      await setSetting(SETTING_KEYS.ganttMinLeftPaneWidth, String(clamped));
     } catch (e) {
       set({ statusMessage: `設定の保存に失敗しました: ${String(e)}` });
     }

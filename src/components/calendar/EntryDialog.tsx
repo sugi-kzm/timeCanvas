@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "../../store/appStore";
+import { confirmDialog } from "../../store/confirmStore";
 import type { Task } from "../../types";
 import { groupTickets } from "../../lib/tickets";
 
@@ -93,9 +94,14 @@ export function EntryDialog() {
 
   const remove = () => {
     if (editor.mode !== "edit") return;
-    if (window.confirm("この記録を削除しますか？")) {
-      void removeEntry(editor.entry.id);
-    }
+    const entryId = editor.entry.id;
+    void confirmDialog({
+      title: "記録を削除",
+      message: "この記録を削除しますか？",
+      danger: true,
+    }).then((ok) => {
+      if (ok) void removeEntry(entryId);
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

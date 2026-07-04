@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useAppStore } from "../../store/appStore";
+import { confirmDialog } from "../../store/confirmStore";
 import type { Task } from "../../types";
 import { groupTickets } from "../../lib/tickets";
 import { statusConfig } from "../../lib/status";
@@ -19,18 +20,20 @@ import { IconChevronRight } from "../icons";
 
 /** 1日 = 1マス（正方形）。行の高さは CSS 側の min-height 30px と対応する */
 const DAY_WIDTH = 30;
-const LEFT_PANE_WIDTH = 300;
+const DEFAULT_LEFT_PANE_WIDTH = 300;
+const MAX_LEFT_PANE_WIDTH = 600;
 
 interface GanttChartProps {
-  /** null = すべて表示。カテゴリ ID で絞り込み */
-  filterCategoryId: string | null;
+  /** null = すべて表示。分類 ID で絞り込み */
+  filterGroupId: string | null;
 }
 
-export function GanttChart({ filterCategoryId }: GanttChartProps) {
+export function GanttChart({ filterGroupId }: GanttChartProps) {
   const tasks = useAppStore((s) => s.tasks);
   const categories = useAppStore((s) => s.categories);
   const entryRanges = useAppStore((s) => s.taskEntryRanges);
   const ganttStartOffsetDays = useAppStore((s) => s.ganttStartOffsetDays);
+  const ganttMinLeftPaneWidth = useAppStore((s) => s.ganttMinLeftPaneWidth);
   const updateTask = useAppStore((s) => s.updateTask);
   const addTask = useAppStore((s) => s.addTask);
   const removeTask = useAppStore((s) => s.removeTask);
@@ -38,13 +41,15 @@ export function GanttChart({ filterCategoryId }: GanttChartProps) {
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(new Set());
   const [addingTicket, setAddingTicket] = useState(false);
   const [newTicketTitle, setNewTicketTitle] = useState("");
+  const [leftPaneWidth, setLeftPaneWidth] = useState(DEFAULT_LEFT_PANE_WIDTH);
+  const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const groups = useMemo(() => {
     const all = groupTickets(tasks);
-    if (filterCategoryId === null) return all;
-    return all.filter((g) => g.ticket.categoryId === filterCategoryId);
-  }, [tasks, filterCategoryId]);
+    if (filterGroupId === null) return all;
+    return all.filter((g) => g.ticket.groupId === filterGroupId);
+  }, [tasks, filterGroupId]);
   const today = new Date();
 
   const range = useMemo(() => {
@@ -60,6 +65,7 @@ export function GanttChart({ filterCategoryId }: GanttChartProps) {
   const days = useMemo(() => dayCells(range), [range]);
   const timelineWidth = range.totalDays * DAY_WIDTH;
   const todayPos = todayOffset(range, today);
+  const paneWidth = Math.max(ganttMinLeftPaneWidth, Math.min(MAX_LEFT_PANE_WIDTH, leftPaneWidth));
 
   const toggleExpand = (id: string) =>
     setCollapsedIds((prev) => {
@@ -71,7 +77,7 @@ export function GanttChart({ filterCategoryId }: GanttChartProps) {
 
   const submitTicket = () => {
     const title = newTicketTitle.trim();
-    if (title !== "") void addTask(title, filterCategoryId, null);
+    if (title !== "") void addTask(title, null, null, filterGroupId);
     setNewTicketTitle("");
     setAddingTicket(false);
   };
@@ -80,12 +86,63 @@ export function GanttChart({ filterCategoryId }: GanttChartProps) {
     (task.categoryId !== null ? categoryById.get(task.categoryId)?.color : undefined) ??
     UNCATEGORIZED_COLOR;
 
+  const startResize = (e: React.PointerEvent) => {
+    resizeRef.current = { startX: e.clientX, startWidth: paneWidth };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onResizeMove = (e: React.PointerEvent) => {
+    if (resizeRef.current === null) return;
+    const delta = e.clientX - resizeRef.current.startX;
+    setLeftPaneWidth(
+      Math.max(
+        ganttMinLeftPaneWidth,
+        Math.min(MAX_LEFT_PANE_WIDTH, resizeRef.current.startWidth + delta),
+      ),
+    );
+  };
+  const endResize = () => {
+    resizeRef.current = null;
+  };
+
+  const confirmDeleteTicket = (task: Task, hasChildren: boolean) => {
+    void confirmDialog({
+      title: "チケットを削除",
+      message: hasChildren
+        ? `チケット「${task.title}」を削除しますか？\n（子タスクも削除されます。記録済みの実績は残ります）`
+        : `「${task.title}」を削除しますか？\n（記録済みの実績は残ります）`,
+      danger: true,
+    }).then((ok) => {
+      if (ok) void removeTask(task.id);
+    });
+  };
+
+  const confirmDeleteChild = (task: Task) => {
+    void confirmDialog({
+      title: "タスクを削除",
+      message: `タスク「${task.title}」を削除しますか？\n（記録済みの実績は残ります）`,
+      danger: true,
+    }).then((ok) => {
+      if (ok) void removeTask(task.id);
+    });
+  };
+
+  const leftStyle = { width: paneWidth };
+
   return (
     <div className="gantt">
       <div className="gantt-scroll">
-        <div style={{ width: LEFT_PANE_WIDTH + timelineWidth }}>
+        <div style={{ width: paneWidth + timelineWidth }}>
           <div className="gantt-header-row">
-            <div className="gantt-left gantt-left-head">チケット</div>
+            <div className="gantt-left gantt-left-head" style={leftStyle}>
+              チケット
+              <span
+                className="gantt-resize-handle"
+                onPointerDown={startResize}
+                onPointerMove={onResizeMove}
+                onPointerUp={endResize}
+                title="ドラッグで幅を調整"
+              />
+            </div>
             <div className="gantt-timeline gantt-months" style={{ width: timelineWidth }}>
               {months.map((m) => (
                 <span
@@ -99,7 +156,7 @@ export function GanttChart({ filterCategoryId }: GanttChartProps) {
             </div>
           </div>
           <div className="gantt-header-row">
-            <div className="gantt-left gantt-left-head" />
+            <div className="gantt-left gantt-left-head" style={leftStyle} />
             <div className="gantt-timeline gantt-days" style={{ width: timelineWidth }}>
               {days.map((d) => {
                 const dow = d.getDay();
@@ -119,7 +176,7 @@ export function GanttChart({ filterCategoryId }: GanttChartProps) {
           </div>
           {groups.length === 0 && (
             <div className="gantt-row">
-              <div className="gantt-left gantt-empty-left">
+              <div className="gantt-left gantt-empty-left" style={leftStyle}>
                 <span className="gantt-empty-text">チケットがありません</span>
               </div>
               <GanttRowTimeline width={timelineWidth} todayPos={todayPos} />
@@ -137,6 +194,7 @@ export function GanttChart({ filterCategoryId }: GanttChartProps) {
                   onToggle={() => toggleExpand(group.ticket.id)}
                   range={range}
                   timelineWidth={timelineWidth}
+                  leftWidth={paneWidth}
                   todayPos={todayPos}
                   color={colorOf(group.ticket)}
                   entryRange={entryRanges.get(group.ticket.id)}
@@ -144,16 +202,15 @@ export function GanttChart({ filterCategoryId }: GanttChartProps) {
                   onAddChild={() => {
                     const name = window.prompt("タスク名を入力してください");
                     if (name !== null && name.trim() !== "") {
-                      void addTask(name.trim(), group.ticket.categoryId, group.ticket.id);
+                      void addTask(
+                        name.trim(),
+                        group.ticket.categoryId,
+                        group.ticket.id,
+                        group.ticket.groupId,
+                      );
                     }
                   }}
-                  onDelete={() => {
-                    const warning =
-                      group.children.length > 0
-                        ? `チケット「${group.ticket.title}」を削除しますか？\n（子タスクも削除されます。記録済みの実績は残ります）`
-                        : `「${group.ticket.title}」を削除しますか？\n（記録済みの実績は残ります）`;
-                    if (window.confirm(warning)) void removeTask(group.ticket.id);
-                  }}
+                  onDelete={() => confirmDeleteTicket(group.ticket, group.children.length > 0)}
                 />
                 {expanded &&
                   group.children.map((child) => (
@@ -165,19 +222,12 @@ export function GanttChart({ filterCategoryId }: GanttChartProps) {
                       expanded={false}
                       range={range}
                       timelineWidth={timelineWidth}
+                      leftWidth={paneWidth}
                       todayPos={todayPos}
                       color={colorOf(child)}
                       entryRange={entryRanges.get(child.id)}
                       onUpdate={updateTask}
-                      onDelete={() => {
-                        if (
-                          window.confirm(
-                            `タスク「${child.title}」を削除しますか？\n（記録済みの実績は残ります）`,
-                          )
-                        ) {
-                          void removeTask(child.id);
-                        }
-                      }}
+                      onDelete={() => confirmDeleteChild(child)}
                     />
                   ))}
               </div>
@@ -185,7 +235,7 @@ export function GanttChart({ filterCategoryId }: GanttChartProps) {
           })}
           {/* ガント上からのチケット追加 */}
           <div className="gantt-row">
-            <div className="gantt-left gantt-add-left">
+            <div className="gantt-left gantt-add-left" style={leftStyle}>
               {addingTicket ? (
                 <input
                   type="text"
@@ -218,7 +268,7 @@ export function GanttChart({ filterCategoryId }: GanttChartProps) {
         </div>
       </div>
       <p className="gantt-hint">
-        タイムライン上をドラッグすると開始日〜期限日を設定できます。
+        タイムライン上をドラッグすると開始日〜期限日を設定できます。左ペインの右端をドラッグすると幅を調整できます。
         日付未設定のときは記録（実績）の期間を薄いバーで表示します。
       </p>
     </div>
@@ -243,6 +293,7 @@ interface GanttRowProps {
   onToggle?: () => void;
   range: GanttRange;
   timelineWidth: number;
+  leftWidth: number;
   todayPos: number | null;
   color: string;
   entryRange: { from: string; to: string } | undefined;
@@ -265,6 +316,7 @@ function GanttRow({
   onToggle,
   range,
   timelineWidth,
+  leftWidth,
   todayPos,
   color,
   entryRange,
@@ -309,12 +361,11 @@ function GanttRow({
   };
 
   const previewLeft = drag !== null ? Math.min(drag.anchorIdx, drag.currentIdx) : 0;
-  const previewDays =
-    drag !== null ? Math.abs(drag.currentIdx - drag.anchorIdx) + 1 : 0;
+  const previewDays = drag !== null ? Math.abs(drag.currentIdx - drag.anchorIdx) + 1 : 0;
 
   return (
     <div className={`gantt-row ${isTicket ? "ticket" : "child"}`}>
-      <div className="gantt-left">
+      <div className="gantt-left" style={{ width: leftWidth }}>
         {isTicket ? (
           <button
             type="button"

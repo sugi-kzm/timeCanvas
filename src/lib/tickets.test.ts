@@ -17,6 +17,7 @@ function makeTask(
     title: `item-${id}`,
     memo: "",
     categoryId: null,
+    groupId: null,
     estimateMinutes: null,
     status: "todo",
     startDate: null,

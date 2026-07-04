@@ -3,6 +3,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { invoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../store/appStore";
+import { confirmDialog } from "../store/confirmStore";
 import { CATEGORY_PALETTE } from "../lib/colors";
 import { entriesToCsv, entriesToJson } from "../lib/export";
 import { listAllEntries } from "../db/entryRepo";
@@ -109,13 +110,13 @@ function CategoriesTab() {
               type="button"
               className="btn danger"
               onClick={() => {
-                if (
-                  window.confirm(
-                    `カテゴリ「${c.name}」を削除しますか？\n（このカテゴリの記録は「未分類」になります）`,
-                  )
-                ) {
-                  void archiveCategory(c.id);
-                }
+                void confirmDialog({
+                  title: "カテゴリを削除",
+                  message: `カテゴリ「${c.name}」を削除しますか？\n（このカテゴリの記録は「未分類」になります）`,
+                  danger: true,
+                }).then((ok) => {
+                  if (ok) void archiveCategory(c.id);
+                });
               }}
             >
               削除
@@ -243,11 +244,15 @@ function DataTab() {
       filters: [{ name: "TimeCanvas バックアップ", extensions: ["db"] }],
     });
     if (typeof path !== "string") return;
-    const ok = window.confirm(
-      "現在のデータを、選択したバックアップの内容で置き換えます。よろしいですか？\n" +
+    const ok = await confirmDialog({
+      title: "バックアップから復元",
+      message:
+        "現在のデータを、選択したバックアップの内容で置き換えます。よろしいですか？\n" +
         "（現在のデータは timecanvas-pre-restore-*.db としてデータフォルダに残ります。\n" +
         "続行するとアプリが再起動します）",
-    );
+      confirmLabel: "復元する",
+      danger: true,
+    });
     if (!ok) return;
     try {
       await invoke("stage_restore", { src: path });
