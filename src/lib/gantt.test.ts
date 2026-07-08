@@ -4,6 +4,7 @@ import {
   computeGanttRange,
   dayCells,
   dayDiff,
+  initialScrollOffsetDays,
   monthSegments,
   offsetToDate,
   spanToBar,
@@ -88,6 +89,62 @@ describe("computeGanttRange", () => {
     const cells = dayCells(range);
     expect(cells).toHaveLength(range.totalDays);
     expect(offsetToDate(range, 3)).toBe("2026-07-03");
+  });
+
+  it("過去に開始するバーがあれば範囲は過去へ広がる（開始 - 7日の余白）", () => {
+    const range = computeGanttRange(
+      [{ start: "2026-06-01", end: "2026-06-10", derived: false }],
+      today,
+    );
+    expect(dayDiff(range.from, new Date(2026, 5, 1))).toBe(7);
+  });
+
+  it("複数の過去バーがあれば最も古い開始日を基準にする", () => {
+    const range = computeGanttRange(
+      [
+        { start: "2026-06-15", end: "2026-06-20", derived: false },
+        { start: "2026-05-01", end: "2026-05-03", derived: false },
+      ],
+      today,
+    );
+    expect(dayDiff(range.from, new Date(2026, 4, 1))).toBe(7);
+  });
+
+  it("過去バーがあっても spanToBar でクリップされない", () => {
+    const span = { start: "2026-06-01", end: "2026-06-10", derived: false };
+    const range = computeGanttRange([span], today);
+    const bar = spanToBar(span, range);
+    expect(bar.offsetDays).toBe(7);
+    expect(bar.widthDays).toBe(10);
+  });
+});
+
+describe("initialScrollOffsetDays", () => {
+  const today = new Date(2026, 6, 3);
+
+  it("過去バーがなければ 0（先頭 = 今日 - offset）", () => {
+    const range = computeGanttRange([], today);
+    expect(initialScrollOffsetDays(range, today)).toBe(0);
+  });
+
+  it("過去バーがあれば「今日 - offset」までのスクロール量を返す", () => {
+    const range = computeGanttRange(
+      [{ start: "2026-06-01", end: "2026-06-10", derived: false }],
+      today,
+    );
+    // range.from = 5/25（6/1 - 7日）、今日 - 3日 = 6/30 → 36日分
+    expect(initialScrollOffsetDays(range, today)).toBe(dayDiff(range.from, new Date(2026, 5, 30)));
+  });
+
+  it("startOffsetDays の指定を反映する", () => {
+    const range = computeGanttRange(
+      [{ start: "2026-06-01", end: "2026-06-10", derived: false }],
+      today,
+      7,
+    );
+    expect(initialScrollOffsetDays(range, today, 7)).toBe(
+      dayDiff(range.from, new Date(2026, 5, 26)),
+    );
   });
 });
 

@@ -66,10 +66,11 @@ export function IconNotebook({ size = 20 }: IconProps) {
 }
 
 export function IconGear({ size = 20 }: IconProps) {
+  // 歯付きのコグ（Lucide "settings" 相当）。放射線タイプは太陽に見えるため不採用
   return (
     <svg {...iconAttrs(size)}>
-      <circle cx="12" cy="12" r="2.8" />
-      <path d="M12 3.2v2.6M12 18.2v2.6M20.8 12h-2.6M5.8 12H3.2M18.1 5.9l-1.85 1.85M7.75 16.25L5.9 18.1M18.1 18.1l-1.85-1.85M7.75 7.75L5.9 5.9" />
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }
@@ -78,6 +79,24 @@ export function IconChevronLeft({ size = 18 }: IconProps) {
   return (
     <svg {...iconAttrs(size)}>
       <path d="M14 6l-6 6 6 6" />
+    </svg>
+  );
+}
+
+export function IconArrowLeft({ size = 18 }: IconProps) {
+  return (
+    <svg {...iconAttrs(size)}>
+      <path d="M19 12H5" />
+      <path d="M12 19l-7-7 7-7" />
+    </svg>
+  );
+}
+
+export function IconArrowRight({ size = 18 }: IconProps) {
+  return (
+    <svg {...iconAttrs(size)}>
+      <path d="M5 12h14" />
+      <path d="M12 5l7 7-7 7" />
     </svg>
   );
 }
@@ -143,11 +162,11 @@ export function IconHistory({ size = 20 }: IconProps) {
 }
 
 export function IconSidebar({ size = 18 }: IconProps) {
+  // 外枠 + 縦仕切りのみのアウトライン型（Claude Code のサイドバートグル風）
   return (
     <svg {...iconAttrs(size)}>
       <rect x="3" y="4.5" width="18" height="15" rx="2" />
       <path d="M9.5 4.5v15" />
-      <rect x="3" y="4.5" width="6.5" height="15" rx="0" fill="currentColor" stroke="none" />
     </svg>
   );
 }

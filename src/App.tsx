@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
-import { useAppStore } from "./store/appStore";
+import { isSidebarVisible, useAppStore } from "./store/appStore";
 import { NavRail } from "./components/NavRail";
 import { Toolbar } from "./components/Toolbar";
 import { Sidebar } from "./components/sidebar/Sidebar";
@@ -25,6 +25,12 @@ const DAILY_BACKUP_CHECK_MS = 30 * 60 * 1000;
 const SIDEBAR_AUTOHIDE_THRESHOLD_PX = 216 + 827;
 /** 日表示に切り替えたときの横幅（11時間表示・tauri.conf.json の minWidth: 720 より少し余裕を持たせる） */
 const DAY_VIEW_WINDOW_WIDTH = 760;
+/** 日表示のコンパクト高さ（ツールバー + 時刻行 + トラック + 余白） */
+const DAY_VIEW_WINDOW_HEIGHT = 320;
+/** 日表示中はさらに小さくもできる（ユーザーの手動リサイズを妨げない） */
+const DAY_VIEW_MIN_SIZE = new LogicalSize(480, 240);
+/** 通常時の最小サイズ（tauri.conf.json の minWidth/minHeight と同値に保つ） */
+const DEFAULT_MIN_SIZE = new LogicalSize(480, 320);
 
 let lifecycleRegistered = false;
 
@@ -38,30 +44,49 @@ export default function App() {
   const settingsOpen = useAppStore((s) => s.settingsOpen);
   const statusMessage = useAppStore((s) => s.statusMessage);
   const setStatus = useAppStore((s) => s.setStatus);
-  const sidebarManuallyHidden = useAppStore((s) => s.sidebarManuallyHidden);
+  const sidebarPref = useAppStore((s) => s.sidebarPref);
+  const sidebarWidthOk = useAppStore((s) => s.sidebarWidthOk);
+  const setSidebarWidthOk = useAppStore((s) => s.setSidebarWidthOk);
 
   const appBodyRef = useRef<HTMLDivElement>(null);
-  const [sidebarWidthOk, setSidebarWidthOk] = useState(true);
-  const sidebarVisible = sidebarWidthOk && !sidebarManuallyHidden;
+  const sidebarVisible = isSidebarVisible(sidebarPref, sidebarWidthOk);
   const preDayViewSizeRef = useRef<LogicalSize | null>(null);
+  /** 日表示中にユーザーが手動リサイズしたサイズ。次回の日表示で再利用する */
+  const lastDayViewSizeRef = useRef<LogicalSize | null>(null);
+  /** 日表示リサイズの世代トークン。素早い切替時に古い async 処理が後から効かないようにする */
+  const resizeSeqRef = useRef(0);
 
   useEffect(() => {
     void init();
   }, [init]);
 
-  // 日表示に入るときはウィンドウ自体を最小実用幅まで縮め、離れたら元のサイズに戻す
+  // 日表示に入るときはウィンドウ自体をコンパクトな最小サイズまで縮め、離れたら元のサイズに戻す
   useEffect(() => {
     if (!isTauri()) return;
     const win = getCurrentWindow();
     const isDayView = view === "calendar" && calendarMode === "day";
 
+    const seq = ++resizeSeqRef.current;
+    const isStale = () => seq !== resizeSeqRef.current;
+
     if (isDayView) {
       void (async () => {
         try {
-          const factor = await win.scaleFactor();
-          const current = (await win.innerSize()).toLogical(factor);
-          preDayViewSizeRef.current = current;
-          await win.setSize(new LogicalSize(DAY_VIEW_WINDOW_WIDTH, current.height * 0.75));
+          if (preDayViewSizeRef.current === null) {
+            const factor = await win.scaleFactor();
+            const current = (await win.innerSize()).toLogical(factor);
+            if (isStale()) return;
+            preDayViewSizeRef.current = current;
+          }
+          // 日表示中はさらに小さくできるよう最小サイズ制約を緩める
+          if (isStale()) return;
+          await win.setMinSize(DAY_VIEW_MIN_SIZE);
+          if (isStale()) return;
+          // 前回の日表示で手動リサイズしたサイズがあればそれを尊重する
+          await win.setSize(
+            lastDayViewSizeRef.current ??
+              new LogicalSize(DAY_VIEW_WINDOW_WIDTH, DAY_VIEW_WINDOW_HEIGHT),
+          );
         } catch (err) {
           console.error("day view のウィンドウリサイズに失敗しました", err);
         }
@@ -70,14 +95,26 @@ export default function App() {
       const previous = preDayViewSizeRef.current;
       if (previous !== null) {
         preDayViewSizeRef.current = null;
-        win.setSize(previous).catch((err) => {
-          console.error("ウィンドウサイズの復元に失敗しました", err);
-        });
+        void (async () => {
+          try {
+            // 日表示中に手動リサイズしていたら次回のために記憶する
+            const factor = await win.scaleFactor();
+            const current = (await win.innerSize()).toLogical(factor);
+            if (isStale()) return;
+            lastDayViewSizeRef.current = current;
+            await win.setMinSize(DEFAULT_MIN_SIZE);
+            if (isStale()) return;
+            await win.setSize(previous);
+          } catch (err) {
+            console.error("ウィンドウサイズの復元に失敗しました", err);
+          }
+        })();
       }
     }
   }, [view, calendarMode]);
 
-  // 幅が足りないときはサイドバーを自動的に隠す（双方向・自動で元に戻る）
+  // 幅が足りないときはサイドバーを自動的に隠す（auto のときのみ有効。手動指定が優先）。
+  // .app-body はカレンダー以外の画面で unmount されるため、view の変化で監視を張り直す
   useEffect(() => {
     const el = appBodyRef.current;
     if (el === null) return;
@@ -86,7 +123,7 @@ export default function App() {
     const observer = new ResizeObserver(update);
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [view, setSidebarWidthOk]);
 
   // 終了時バックアップと日次バックアップ（アプリ全体で一度だけ登録）
   useEffect(() => {

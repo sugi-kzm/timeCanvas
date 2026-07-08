@@ -44,6 +44,16 @@ export type EditorState =
     }
   | { mode: "edit"; entry: TimeEntry };
 
+/** サイドバー表示の希望。"auto" は幅に応じて自動、"shown"/"hidden" はユーザーの明示指定が優先 */
+export type SidebarPref = "auto" | "shown" | "hidden";
+
+/** サイドバーの実効表示。明示指定が幅判定より優先される */
+export function isSidebarVisible(pref: SidebarPref, widthOk: boolean): boolean {
+  if (pref === "shown") return true;
+  if (pref === "hidden") return false;
+  return widthOk;
+}
+
 export type TasksViewMode = "tickets" | "board" | "gantt";
 
 interface AppState {
@@ -75,8 +85,10 @@ interface AppState {
   /** チケット一覧の並び順モード（期限順 / 手動）。設定から変更できる */
   ticketSortMode: TicketSortMode;
   hiddenCategoryIds: readonly string[];
-  /** サイドバーを手動で隠しているか（幅不足による自動非表示とは独立） */
-  sidebarManuallyHidden: boolean;
+  /** サイドバー表示の希望（auto=幅に応じて / shown・hidden=手動指定が優先） */
+  sidebarPref: SidebarPref;
+  /** 現在のウィンドウ幅がサイドバー+本体を並べるのに足りているか（App の ResizeObserver が更新） */
+  sidebarWidthOk: boolean;
   selectedEntryId: string | null;
   quickCreate: QuickCreateState | null;
   editor: EditorState | null;
@@ -132,7 +144,8 @@ interface AppState {
   setTicketSortMode: (mode: TicketSortMode) => Promise<void>;
   reorderTickets: (idsInOrder: readonly string[]) => Promise<void>;
 
-  toggleSidebarManuallyHidden: () => void;
+  toggleSidebar: () => void;
+  setSidebarWidthOk: (ok: boolean) => void;
 
   setSearchKeyword: (keyword: string) => void;
   setSearchBoxOpen: (open: boolean) => void;
@@ -170,7 +183,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   scheduleStartHour: 9,
   ticketSortMode: "due",
   hiddenCategoryIds: [],
-  sidebarManuallyHidden: false,
+  sidebarPref: "auto",
+  sidebarWidthOk: true,
   selectedEntryId: null,
   quickCreate: null,
   editor: null,
@@ -506,8 +520,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  toggleSidebarManuallyHidden: () =>
-    set((s) => ({ sidebarManuallyHidden: !s.sidebarManuallyHidden })),
+  toggleSidebar: () =>
+    set((s) => ({
+      sidebarPref: isSidebarVisible(s.sidebarPref, s.sidebarWidthOk) ? "hidden" : "shown",
+    })),
+  setSidebarWidthOk: (ok) => set({ sidebarWidthOk: ok }),
 
   setSearchKeyword: (keyword) => set({ searchKeyword: keyword }),
   setSearchBoxOpen: (open) => set({ searchBoxOpen: open }),

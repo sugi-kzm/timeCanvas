@@ -1,15 +1,32 @@
 import { describe, expect, it } from "vitest";
 import {
+  analyticsPeriodRange,
   buildCategoryHeatmaps,
+  buildHourDowHeatmap,
+  buildPeriodStackedBars,
   buildYearHeatmap,
   categoryEstimateFactors,
   compareEstimates,
+  comparePeriods,
   estimateAccuracy,
   heatmapLevel,
   minutesByDay,
   minutesByDayAndCategory,
+  previousPeriodAnchor,
+  scaledHeatLevel,
 } from "./analytics";
 import type { Category, Task, TimeEntry } from "../types";
+
+function makeCategory(id: string, name: string, color = "#123456"): Category {
+  return {
+    id,
+    name,
+    color,
+    archived: false,
+    sortOrder: 0,
+    createdAt: "2026-01-01T00:00:00",
+  };
+}
 
 function makeEntry(
   id: string,
@@ -218,5 +235,167 @@ describe("buildCategoryHeatmaps", () => {
     const from = new Date(2026, 6, 1);
     const to = new Date(2026, 6, 8);
     expect(buildCategoryHeatmaps(from, to, new Map(), [dev])).toEqual([]);
+  });
+});
+
+describe("analyticsPeriodRange / previousPeriodAnchor", () => {
+  it("week は週の開始から7日間（to は排他的）", () => {
+    const { from, to } = analyticsPeriodRange("week", new Date(2026, 6, 8), 0);
+    expect(from).toEqual(new Date(2026, 6, 5)); // 日曜始まり
+    expect(to).toEqual(new Date(2026, 6, 12));
+  });
+
+  it("month は月の1日から翌月1日まで（カレンダーの6週グリッドではない）", () => {
+    const { from, to } = analyticsPeriodRange("month", new Date(2026, 6, 8), 0);
+    expect(from).toEqual(new Date(2026, 6, 1));
+    expect(to).toEqual(new Date(2026, 7, 1));
+  });
+
+  it("year は 1/1 から翌年 1/1 まで", () => {
+    const { from, to } = analyticsPeriodRange("year", new Date(2026, 6, 8), 0);
+    expect(from).toEqual(new Date(2026, 0, 1));
+    expect(to).toEqual(new Date(2027, 0, 1));
+  });
+
+  it("previousPeriodAnchor: week は7日前、month は前月1日、year は前年1/1", () => {
+    expect(previousPeriodAnchor("week", new Date(2026, 6, 8))).toEqual(new Date(2026, 6, 1));
+    expect(previousPeriodAnchor("month", new Date(2026, 6, 8))).toEqual(new Date(2026, 5, 1));
+    expect(previousPeriodAnchor("year", new Date(2026, 6, 8))).toEqual(new Date(2025, 0, 1));
+  });
+});
+
+describe("buildPeriodStackedBars", () => {
+  const cats = [makeCategory("c1", "開発", "#111111"), makeCategory("c2", "学習", "#222222")];
+
+  it("week は週始まり順の7本で、カテゴリ別に積み上がる", () => {
+    const bars = buildPeriodStackedBars(
+      "week",
+      new Date(2026, 6, 8),
+      0,
+      [
+        makeEntry("1", "2026-07-06T09:00:00", "2026-07-06T10:00:00", "c1"),
+        makeEntry("2", "2026-07-06T13:00:00", "2026-07-06T13:30:00", "c2"),
+        makeEntry("3", "2026-07-07T09:00:00", "2026-07-07T11:00:00", "c1"),
+      ],
+      cats,
+    );
+    expect(bars).toHaveLength(7);
+    expect(bars[0].key).toBe("2026-07-05");
+    const monday = bars[1];
+    expect(monday.totalMinutes).toBe(90);
+    expect(monday.segments.map((s) => s.minutes)).toEqual([60, 30]); // 分の降順
+    expect(monday.segments[0].name).toBe("開発");
+    expect(bars[2].totalMinutes).toBe(120);
+  });
+
+  it("month はその月の日数分のバーになり、隣接月のエントリは含めない", () => {
+    const bars = buildPeriodStackedBars(
+      "month",
+      new Date(2026, 6, 8),
+      0,
+      [
+        makeEntry("1", "2026-07-01T09:00:00", "2026-07-01T10:00:00", "c1"),
+        makeEntry("2", "2026-06-30T09:00:00", "2026-06-30T10:00:00", "c1"), // 前月 → 除外
+      ],
+      cats,
+    );
+    expect(bars).toHaveLength(31); // 2026年7月
+    expect(bars[0].key).toBe("2026-07-01");
+    expect(bars[0].totalMinutes).toBe(60);
+    expect(bars.reduce((s, b) => s + b.totalMinutes, 0)).toBe(60);
+  });
+
+  it("year は12本の月集計になる", () => {
+    const bars = buildPeriodStackedBars(
+      "year",
+      new Date(2026, 6, 8),
+      0,
+      [
+        makeEntry("1", "2026-01-10T09:00:00", "2026-01-10T10:00:00", "c1"),
+        makeEntry("2", "2026-01-20T09:00:00", "2026-01-20T10:00:00", "c1"),
+        makeEntry("3", "2026-12-01T09:00:00", "2026-12-01T09:30:00", null),
+      ],
+      cats,
+    );
+    expect(bars).toHaveLength(12);
+    expect(bars[0].totalMinutes).toBe(120);
+    expect(bars[11].totalMinutes).toBe(30);
+    expect(bars[11].segments[0].categoryId).toBeNull();
+  });
+
+  it("期間外のエントリは無視し、空入力なら全バー0", () => {
+    const bars = buildPeriodStackedBars(
+      "week",
+      new Date(2026, 6, 8),
+      0,
+      [makeEntry("1", "2026-08-01T09:00:00", "2026-08-01T10:00:00", "c1")],
+      cats,
+    );
+    expect(bars.every((b) => b.totalMinutes === 0)).toBe(true);
+  });
+});
+
+describe("comparePeriods", () => {
+  const cats = [makeCategory("c1", "開発", "#111111")];
+
+  it("合計と増減、カテゴリ別の差分を返す", () => {
+    const result = comparePeriods(
+      [
+        makeEntry("1", "2026-07-06T09:00:00", "2026-07-06T11:00:00", "c1"),
+        makeEntry("2", "2026-07-07T09:00:00", "2026-07-07T09:30:00", null),
+      ],
+      [makeEntry("3", "2026-06-29T09:00:00", "2026-06-29T10:00:00", "c1")],
+      cats,
+    );
+    expect(result.currentTotal).toBe(150);
+    expect(result.previousTotal).toBe(60);
+    expect(result.deltaMinutes).toBe(90);
+    expect(result.deltaRatio).toBeCloseTo(1.5);
+    const dev = result.byCategory.find((c) => c.categoryId === "c1");
+    expect(dev?.deltaMinutes).toBe(60);
+    const none = result.byCategory.find((c) => c.categoryId === null);
+    expect(none?.previousMinutes).toBe(0);
+    expect(none?.deltaMinutes).toBe(30);
+  });
+
+  it("前期間が0のとき deltaRatio は null", () => {
+    const result = comparePeriods(
+      [makeEntry("1", "2026-07-06T09:00:00", "2026-07-06T10:00:00", null)],
+      [],
+      cats,
+    );
+    expect(result.deltaRatio).toBeNull();
+    expect(result.deltaMinutes).toBe(60);
+  });
+});
+
+describe("buildHourDowHeatmap / scaledHeatLevel", () => {
+  it("時間境界でエントリを分割して各セルに配分する", () => {
+    // 2026-07-06 は月曜（dow=1）。9:30-11:15 → 9時台30分・10時台60分・11時台15分
+    const { minutes, maxMinutes } = buildHourDowHeatmap([
+      makeEntry("1", "2026-07-06T09:30:00", "2026-07-06T11:15:00", null),
+    ]);
+    expect(minutes[1][9]).toBe(30);
+    expect(minutes[1][10]).toBe(60);
+    expect(minutes[1][11]).toBe(15);
+    expect(minutes[1][12]).toBe(0);
+    expect(minutes[0][9]).toBe(0);
+    expect(maxMinutes).toBe(60);
+  });
+
+  it("空入力なら全セル0で maxMinutes も0", () => {
+    const { minutes, maxMinutes } = buildHourDowHeatmap([]);
+    expect(minutes).toHaveLength(7);
+    expect(minutes.every((row) => row.length === 24 && row.every((m) => m === 0))).toBe(true);
+    expect(maxMinutes).toBe(0);
+  });
+
+  it("scaledHeatLevel は max に対する相対5段階", () => {
+    expect(scaledHeatLevel(0, 100)).toBe(0);
+    expect(scaledHeatLevel(1, 100)).toBe(1);
+    expect(scaledHeatLevel(25, 100)).toBe(1);
+    expect(scaledHeatLevel(50, 100)).toBe(2);
+    expect(scaledHeatLevel(100, 100)).toBe(4);
+    expect(scaledHeatLevel(10, 0)).toBe(0);
   });
 });

@@ -105,6 +105,8 @@ export function TicketCombobox({ tasks, taskId, onChange, placeholder }: TicketC
       e.preventDefault();
       setHighlight((h) => Math.max(h - 1, 0));
     } else if (e.key === "Enter") {
+      // IME の変換確定 Enter で候補を選択してしまわないようガードする
+      if (e.nativeEvent.isComposing) return;
       e.preventDefault();
       if (open && filtered[highlight] !== undefined) select(filtered[highlight]);
     } else if (e.key === "Escape") {

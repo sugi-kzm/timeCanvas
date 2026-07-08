@@ -1,7 +1,7 @@
-import { useAppStore } from "../store/appStore";
+import { isSidebarVisible, useAppStore } from "../store/appStore";
 import { calendarLabel } from "../lib/dates";
 import type { CalendarMode } from "../types";
-import { IconChevronLeft, IconChevronRight, IconSearch, IconSidebar } from "./icons";
+import { IconArrowLeft, IconArrowRight, IconSearch, IconSidebar } from "./icons";
 
 const MODES: { key: CalendarMode; label: string }[] = [
   { key: "day", label: "日" },
@@ -21,8 +21,10 @@ export function Toolbar() {
   const setSearchKeyword = useAppStore((s) => s.setSearchKeyword);
   const searchBoxOpen = useAppStore((s) => s.searchBoxOpen);
   const setSearchBoxOpen = useAppStore((s) => s.setSearchBoxOpen);
-  const sidebarManuallyHidden = useAppStore((s) => s.sidebarManuallyHidden);
-  const toggleSidebarManuallyHidden = useAppStore((s) => s.toggleSidebarManuallyHidden);
+  const sidebarPref = useAppStore((s) => s.sidebarPref);
+  const sidebarWidthOk = useAppStore((s) => s.sidebarWidthOk);
+  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const sidebarShown = isSidebarVisible(sidebarPref, sidebarWidthOk);
 
   const showSearchBox = searchBoxOpen || searchKeyword.trim() !== "";
 
@@ -37,9 +39,9 @@ export function Toolbar() {
       <button
         type="button"
         className="btn icon-btn"
-        aria-label={sidebarManuallyHidden ? "サイドバーを表示" : "サイドバーを隠す"}
-        title={sidebarManuallyHidden ? "サイドバーを表示" : "サイドバーを隠す"}
-        onClick={toggleSidebarManuallyHidden}
+        aria-label={sidebarShown ? "サイドバーを隠す" : "サイドバーを表示"}
+        title={sidebarShown ? "サイドバーを隠す" : "サイドバーを表示"}
+        onClick={toggleSidebar}
       >
         <IconSidebar size={16} />
       </button>
@@ -52,7 +54,7 @@ export function Toolbar() {
         aria-label="前へ"
         onClick={() => void goPrev()}
       >
-        <IconChevronLeft />
+        <IconArrowLeft size={16} />
       </button>
       <button
         type="button"
@@ -60,7 +62,7 @@ export function Toolbar() {
         aria-label="次へ"
         onClick={() => void goNext()}
       >
-        <IconChevronRight />
+        <IconArrowRight size={16} />
       </button>
       <h1 className="week-label">{calendarLabel(calendarMode, anchorDate, weekStartsOn)}</h1>
       <div className="toolbar-spacer" />

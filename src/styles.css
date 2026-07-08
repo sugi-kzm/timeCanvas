@@ -2,6 +2,7 @@
   --accent: #2383e2;
   --accent-hover: #1a70c7;
   --accent-soft: #e7f3fd;
+  --accent-mid: #c8e1f8;
   --bg: #ffffff;
   --panel: #f7f7f5;
   --hover: rgba(55, 53, 47, 0.06);
@@ -388,15 +389,15 @@ button {
   border-bottom-right-radius: 10px;
 }
 
-/* 日/月表示で選択中の日 */
-.mini-cal-day.selected .mini-cal-day-num {
-  box-shadow: inset 0 0 0 1.5px var(--accent);
+/* 今日は水色の丸（控えめ。--accent-soft だと週選択帯と同化するため一段濃い水色） */
+.mini-cal-day.today .mini-cal-day-num {
+  background: var(--accent-mid);
   color: var(--accent);
   font-weight: 600;
 }
 
-/* 今日は塗りつぶしの丸で強調（帯や選択リングより優先） */
-.mini-cal-day.today .mini-cal-day-num {
+/* 日/月表示で選択中（表示中）の日は濃い青の塗りつぶし。今日より優先 */
+.mini-cal-day.selected .mini-cal-day-num {
   background: var(--accent);
   color: #fff;
   font-weight: 600;
@@ -776,7 +777,7 @@ button {
   flex: 1;
   overflow: auto;
   background: var(--panel);
-  padding: 8px 12px 16px;
+  padding: 4px 12px 8px;
 }
 
 .day-view-hours {
@@ -977,7 +978,9 @@ button {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  /* auto だとスクロールバーの出現/消失で内容の横位置がずれる（WebKitGTK は
+     scrollbar-gutter 非対応のため scroll で常時確保する） */
+  overflow-y: scroll;
   overflow-x: hidden;
   background: var(--bg);
   scrollbar-gutter: stable;
@@ -1255,10 +1258,27 @@ button {
 .search-area {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  /* 検索ボックス展開時に周囲を押し出さないよう、アイコンボタン分の footprint を固定し
+     入力欄は左向きのオーバーレイで表示する（日表示の狭いウィンドウでのずれ防止） */
+  position: relative;
+  width: 30px;
+  height: 30px;
+  flex: none;
 }
 
 .search-box {
   width: 220px;
+}
+
+.search-area input.search-box {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  z-index: 30;
+  background: var(--bg);
+  box-shadow: var(--shadow);
 }
 
 .search-view {
@@ -1398,14 +1418,132 @@ button {
 .analytics-view {
   flex: 1;
   min-width: 0;
-  overflow-y: auto;
+  overflow-y: scroll;
   background: var(--bg);
+  scrollbar-gutter: stable;
 }
 
 .analytics-inner {
   max-width: 900px;
   margin: 0 auto;
   padding: 28px 32px 60px;
+}
+
+/* サマリー（合計 + 前期間比チップ） */
+.analytics-summary-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.analytics-summary-total {
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.analytics-summary-total strong {
+  font-size: 26px;
+  color: var(--text);
+  margin: 0 2px;
+}
+
+.delta-chip {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.delta-chip.down {
+  background: var(--hover);
+  color: var(--text-2);
+}
+
+.delta-category-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.delta-category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-2);
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+/* 日別カテゴリ積み上げ棒グラフ */
+.stacked-bars {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: 190px;
+  padding-top: 8px;
+}
+
+.stacked-bar-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.stacked-bar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  border-radius: 3px 3px 0 0;
+  overflow: hidden;
+}
+
+.stacked-bar-seg {
+  display: block;
+  min-height: 2px;
+}
+
+.stacked-bar-xlabel {
+  font-size: 10px;
+  color: var(--text-3);
+  text-align: center;
+  margin-top: 4px;
+  height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* 時間帯×曜日ヒートマップ */
+.hourdow-grid {
+  display: grid;
+  grid-template-columns: auto repeat(24, minmax(10px, 1fr));
+  gap: 2px;
+  align-items: center;
+  max-width: 700px;
+}
+
+.hourdow-cell {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: 2px;
+}
+
+.hourdow-axis-label {
+  font-size: 10px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+.hourdow-dow-label {
+  padding-right: 4px;
+  text-align: right;
 }
 
 .analytics-controls {
@@ -2329,6 +2467,9 @@ button {
 
 .tasks-view.wide .tasks-inner {
   max-width: none;
+  /* margin:0 auto（基本形の中央寄せ）が残っていると flex の stretch が無効になり、
+     内容幅（ガントの全期間分）まで膨張してスクロール不能になるため幅を明示する */
+  width: 100%;
 }
 
 .kanban {
@@ -2511,7 +2652,8 @@ button {
 }
 
 .gantt-scroll {
-  overflow-x: auto;
+  /* auto だとスクロール可能なことに気づきにくいため、バーを常時表示する */
+  overflow-x: scroll;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg);
@@ -2541,7 +2683,8 @@ button {
 .gantt-resize-handle {
   position: absolute;
   top: 0;
-  right: -3px;
+  /* .gantt-left は overflow:hidden のため、外側にはみ出す配置だとクリップされる */
+  right: 0;
   bottom: 0;
   width: 6px;
   cursor: col-resize;

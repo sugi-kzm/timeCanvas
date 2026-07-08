@@ -1,7 +1,242 @@
 import type { Category, Task, TimeEntry } from "../types";
-import { addDays, dateKey, durationMinutes, startOfDay, startOfWeek, type WeekStartsOn } from "./dates";
+import {
+  addDays,
+  calendarRange,
+  dateKey,
+  durationMinutes,
+  fromLocalIso,
+  startOfDay,
+  startOfWeek,
+  type WeekStartsOn,
+} from "./dates";
 import { UNCATEGORIZED_COLOR, UNCATEGORIZED_LABEL } from "./summary";
 import { groupTickets, rollupActualMinutes, rollupEstimateMinutes } from "./tickets";
+
+export type AnalyticsPeriodKind = "week" | "month" | "year";
+
+/**
+ * 分析の集計期間（to は排他的）。
+ * month は暦月そのもの（カレンダー表示用の6週グリッドを使うと隣接月が混入し、
+ * 前月比の二重計上や42本のバー描画につながるため使わない）。
+ */
+export function analyticsPeriodRange(
+  kind: AnalyticsPeriodKind,
+  anchor: Date,
+  weekStartsOn: WeekStartsOn,
+): { from: Date; to: Date } {
+  if (kind === "year") {
+    return {
+      from: new Date(anchor.getFullYear(), 0, 1),
+      to: new Date(anchor.getFullYear() + 1, 0, 1),
+    };
+  }
+  if (kind === "month") {
+    return {
+      from: new Date(anchor.getFullYear(), anchor.getMonth(), 1),
+      to: new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1),
+    };
+  }
+  return calendarRange("week", anchor, weekStartsOn);
+}
+
+/** 前期間のアンカー（前期間比の計算に使う） */
+export function previousPeriodAnchor(kind: AnalyticsPeriodKind, anchor: Date): Date {
+  if (kind === "week") return addDays(startOfDay(anchor), -7);
+  if (kind === "month") return new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1);
+  return new Date(anchor.getFullYear() - 1, 0, 1);
+}
+
+export interface StackedBarSegment {
+  categoryId: string | null;
+  name: string;
+  color: string;
+  minutes: number;
+}
+
+export interface StackedBarDatum {
+  /** week/month は "YYYY-MM-DD"、year は "YYYY-MM" */
+  key: string;
+  label: string;
+  totalMinutes: number;
+  /** 分の降順 */
+  segments: StackedBarSegment[];
+}
+
+const DOW_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+
+/**
+ * 期間内のカテゴリ別積み上げ棒グラフのデータ。
+ * week = 7本（日別）、month = 日数分、year = 12本（月別集計）。
+ */
+export function buildPeriodStackedBars(
+  kind: AnalyticsPeriodKind,
+  anchor: Date,
+  weekStartsOn: WeekStartsOn,
+  entries: readonly TimeEntry[],
+  categories: readonly Category[],
+): StackedBarDatum[] {
+  const { from, to } = analyticsPeriodRange(kind, anchor, weekStartsOn);
+  const byId = new Map(categories.map((c) => [c.id, c]));
+
+  // バーのキー一覧を先に作る（記録のない日/月も0本として並べる）
+  const keys: { key: string; label: string }[] = [];
+  if (kind === "year") {
+    for (let m = 0; m < 12; m++) {
+      const mm = String(m + 1).padStart(2, "0");
+      keys.push({ key: `${anchor.getFullYear()}-${mm}`, label: `${m + 1}月` });
+    }
+  } else {
+    for (let d = new Date(from); d < to; d = addDays(d, 1)) {
+      const label = kind === "week" ? DOW_LABELS[d.getDay()] : String(d.getDate());
+      keys.push({ key: dateKey(d), label });
+    }
+  }
+
+  const buckets = new Map<string, Map<string | null, number>>(
+    keys.map(({ key }) => [key, new Map()]),
+  );
+  for (const entry of entries) {
+    const start = fromLocalIso(entry.startAt);
+    if (start < from || start >= to) continue;
+    const key = kind === "year" ? entry.startAt.slice(0, 7) : entry.startAt.slice(0, 10);
+    const bucket = buckets.get(key);
+    if (bucket === undefined) continue;
+    const minutes = Math.max(0, durationMinutes(entry.startAt, entry.endAt));
+    bucket.set(entry.categoryId, (bucket.get(entry.categoryId) ?? 0) + minutes);
+  }
+
+  return keys.map(({ key, label }) => {
+    const bucket = buckets.get(key) ?? new Map<string | null, number>();
+    const segments = [...bucket.entries()]
+      .map(([categoryId, minutes]) => {
+        const category = categoryId !== null ? byId.get(categoryId) : undefined;
+        return {
+          categoryId,
+          name: category?.name ?? UNCATEGORIZED_LABEL,
+          color: category?.color ?? UNCATEGORIZED_COLOR,
+          minutes,
+        };
+      })
+      .filter((s) => s.minutes > 0)
+      .sort((a, b) => b.minutes - a.minutes);
+    return {
+      key,
+      label,
+      totalMinutes: segments.reduce((s, seg) => s + seg.minutes, 0),
+      segments,
+    };
+  });
+}
+
+export interface CategoryDelta {
+  categoryId: string | null;
+  name: string;
+  color: string;
+  currentMinutes: number;
+  previousMinutes: number;
+  deltaMinutes: number;
+}
+
+export interface PeriodComparison {
+  currentTotal: number;
+  previousTotal: number;
+  deltaMinutes: number;
+  /** 増減率（deltaMinutes / previousTotal）。+0.5 = 前期間比 +50%。前期間が 0 のときは null */
+  deltaRatio: number | null;
+  /** 現期間の分の降順 */
+  byCategory: CategoryDelta[];
+}
+
+function totalMinutesByCategory(entries: readonly TimeEntry[]): Map<string | null, number> {
+  const map = new Map<string | null, number>();
+  for (const entry of entries) {
+    const minutes = Math.max(0, durationMinutes(entry.startAt, entry.endAt));
+    map.set(entry.categoryId, (map.get(entry.categoryId) ?? 0) + minutes);
+  }
+  return map;
+}
+
+/** 現期間と前期間の合計・カテゴリ別増減 */
+export function comparePeriods(
+  currentEntries: readonly TimeEntry[],
+  previousEntries: readonly TimeEntry[],
+  categories: readonly Category[],
+): PeriodComparison {
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const current = totalMinutesByCategory(currentEntries);
+  const previous = totalMinutesByCategory(previousEntries);
+  const currentTotal = [...current.values()].reduce((s, m) => s + m, 0);
+  const previousTotal = [...previous.values()].reduce((s, m) => s + m, 0);
+
+  const categoryIds = new Set<string | null>([...current.keys(), ...previous.keys()]);
+  const byCategory = [...categoryIds]
+    .map((categoryId) => {
+      const category = categoryId !== null ? byId.get(categoryId) : undefined;
+      const currentMinutes = current.get(categoryId) ?? 0;
+      const previousMinutes = previous.get(categoryId) ?? 0;
+      return {
+        categoryId,
+        name: category?.name ?? UNCATEGORIZED_LABEL,
+        color: category?.color ?? UNCATEGORIZED_COLOR,
+        currentMinutes,
+        previousMinutes,
+        deltaMinutes: currentMinutes - previousMinutes,
+      };
+    })
+    .sort((a, b) => b.currentMinutes - a.currentMinutes);
+
+  return {
+    currentTotal,
+    previousTotal,
+    deltaMinutes: currentTotal - previousTotal,
+    deltaRatio: previousTotal > 0 ? (currentTotal - previousTotal) / previousTotal : null,
+    byCategory,
+  };
+}
+
+export interface HourDowHeatmapData {
+  /** [曜日(0=日)][時(0-23)] の分数 */
+  minutes: number[][];
+  maxMinutes: number;
+}
+
+/**
+ * 時間帯×曜日のヒートマップ。エントリを1時間の境界で分割して各セルへ配分する。
+ * 日をまたぐ分はその日の 24:00 でクリップする。
+ */
+export function buildHourDowHeatmap(entries: readonly TimeEntry[]): HourDowHeatmapData {
+  const minutes: number[][] = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
+  for (const entry of entries) {
+    const start = fromLocalIso(entry.startAt);
+    const end = fromLocalIso(entry.endAt);
+    if (end <= start) continue;
+    const dayEnd = addDays(startOfDay(start), 1);
+    const clippedEnd = end < dayEnd ? end : dayEnd;
+    const dow = start.getDay();
+    let cursor = start;
+    while (cursor < clippedEnd) {
+      const hourEnd = new Date(cursor);
+      hourEnd.setMinutes(60, 0, 0);
+      const segEnd = hourEnd < clippedEnd ? hourEnd : clippedEnd;
+      minutes[dow][cursor.getHours()] += Math.round(
+        (segEnd.getTime() - cursor.getTime()) / 60_000,
+      );
+      cursor = segEnd;
+    }
+  }
+  const maxMinutes = minutes.reduce(
+    (max, row) => row.reduce((m, v) => (v > m ? v : m), max),
+    0,
+  );
+  return { minutes, maxMinutes };
+}
+
+/** 最大値に対する相対5段階（max が 0 なら常に 0） */
+export function scaledHeatLevel(minutes: number, maxMinutes: number): 0 | 1 | 2 | 3 | 4 {
+  if (minutes <= 0 || maxMinutes <= 0) return 0;
+  const level = Math.ceil((minutes / maxMinutes) * 4);
+  return Math.min(4, Math.max(1, level)) as 1 | 2 | 3 | 4;
+}
 
 /** 日付キー（YYYY-MM-DD）ごとの記録分数を集計する */
 export function minutesByDay(entries: readonly TimeEntry[]): Map<string, number> {

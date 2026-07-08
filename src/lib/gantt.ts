@@ -42,9 +42,11 @@ export interface GanttRange {
 export const DEFAULT_GANTT_START_OFFSET_DAYS = 3;
 const MIN_FORWARD_DAYS = 27;
 const PAD_AFTER_DAYS = 7;
+const PAD_BEFORE_DAYS = 7;
 
 /**
- * 表示範囲。開始は「今日 - startOffsetDays」で固定し、
+ * 表示範囲。開始は「今日 - startOffsetDays」を基本に、過去に開始するバーが
+ * あればそこまで（+余白）広げる（過去バーへスクロールで遡れるようにする）。
  * 終了はすべてのバーが収まるところ + 余白（最低でも今日から4週間先まで）。
  */
 export function computeGanttRange(
@@ -53,14 +55,28 @@ export function computeGanttRange(
   startOffsetDays: number = DEFAULT_GANTT_START_OFFSET_DAYS,
 ): GanttRange {
   const day = startOfDay(today);
-  const from = addDays(day, -startOffsetDays);
+  let from = addDays(day, -startOffsetDays);
   let max = addDays(day, MIN_FORWARD_DAYS);
   for (const span of spans) {
+    const s = addDays(startOfDay(fromLocalIso(span.start)), -PAD_BEFORE_DAYS);
+    if (s < from) from = s;
     const e = fromLocalIso(span.end);
     if (e > max) max = e;
   }
   const to = addDays(startOfDay(max), PAD_AFTER_DAYS);
   return { from, to, totalDays: dayDiff(from, to) + 1 };
+}
+
+/**
+ * 初期スクロール位置（日数）。範囲が過去へ広がっていても、
+ * 初期表示は「今日 - startOffsetDays」が左端に来るようにする。
+ */
+export function initialScrollOffsetDays(
+  range: GanttRange,
+  today: Date,
+  startOffsetDays: number = DEFAULT_GANTT_START_OFFSET_DAYS,
+): number {
+  return Math.max(0, dayDiff(range.from, addDays(startOfDay(today), -startOffsetDays)));
 }
 
 /** ヘッダの日セル（1日 = 1マス） */

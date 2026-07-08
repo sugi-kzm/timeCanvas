@@ -5,7 +5,7 @@ import type { TasksViewMode } from "../../store/appStore";
 import { TicketsTab } from "./TicketsTab";
 import { KanbanBoard } from "./KanbanBoard";
 import { GanttChart } from "./GanttChart";
-import { IconChevronLeft, IconChevronRight } from "../icons";
+import { IconSidebar } from "../icons";
 
 const VIEW_TABS: { key: TasksViewMode; label: string }[] = [
   { key: "tickets", label: "チケット" },
@@ -31,7 +31,7 @@ export function TasksView() {
             aria-label={railOpen ? "分類パネルを隠す" : "分類パネルを表示"}
             onClick={() => setRailOpen((v) => !v)}
           >
-            {railOpen ? <IconChevronLeft size={16} /> : <IconChevronRight size={16} />}
+            <IconSidebar size={16} />
           </button>
           <h2 className="tasks-heading">チケット</h2>
         </div>
@@ -59,7 +59,7 @@ export function TasksView() {
           <div className="tickets-main">
             {viewMode === "tickets" && <TicketsTab filterGroupIds={filterGroupIds} />}
             {viewMode === "board" && <KanbanBoard filterGroupIds={filterGroupIds} />}
-            {viewMode === "gantt" && <GanttChart filterGroupIds={filterGroupIds} />}
+            {viewMode === "gantt" && <GanttChart filterGroupIds={filterGroupIds} excludeDone />}
           </div>
         </div>
       </div>

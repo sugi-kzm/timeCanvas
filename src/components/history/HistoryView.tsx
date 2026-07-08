@@ -13,7 +13,7 @@ import {
 import { listEntriesBetween } from "../../db/entryRepo";
 import { toLocalIso } from "../../lib/dates";
 import type { TimeEntry } from "../../types";
-import { IconChevronLeft, IconChevronRight, IconPlus } from "../icons";
+import { IconArrowLeft, IconArrowRight, IconPlus } from "../icons";
 
 const GRANULARITY_TABS: { key: HistoryGranularity; label: string }[] = [
   { key: "week", label: "週" },
@@ -104,7 +104,7 @@ export function HistoryView() {
               aria-label="前の期間へ"
               onClick={() => setAnchor((a) => shiftHistoryAnchor(granularity, a, -1))}
             >
-              <IconChevronLeft />
+              <IconArrowLeft size={16} />
             </button>
             <span className="history-period-label">{periodLabel(granularity, anchor)}</span>
             <button
@@ -113,7 +113,7 @@ export function HistoryView() {
               aria-label="次の期間へ"
               onClick={() => setAnchor((a) => shiftHistoryAnchor(granularity, a, 1))}
             >
-              <IconChevronRight />
+              <IconArrowRight size={16} />
             </button>
           </div>
           <div className="history-view-type">

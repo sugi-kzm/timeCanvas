@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "../../store/appStore";
 import { confirmDialog } from "../../store/confirmStore";
 import type { Task } from "../../types";
@@ -10,6 +10,7 @@ import {
   actualFillRatio,
   computeGanttRange,
   dayCells,
+  initialScrollOffsetDays,
   monthSegments,
   offsetToDate,
   spanToBar,
@@ -29,9 +30,11 @@ interface GanttChartProps {
   filterGroupIds: ReadonlySet<string>;
   /** 指定時、このチケット/タスク ID のみ表示する（履歴ビューなど期間で絞り込む場合に使う） */
   restrictToTaskIds?: ReadonlySet<string>;
+  /** 完了済みのチケット/タスクを表示しない（チケット画面用。履歴では指定しない） */
+  excludeDone?: boolean;
 }
 
-export function GanttChart({ filterGroupIds, restrictToTaskIds }: GanttChartProps) {
+export function GanttChart({ filterGroupIds, restrictToTaskIds, excludeDone }: GanttChartProps) {
   const tasks = useAppStore((s) => s.tasks);
   const categories = useAppStore((s) => s.categories);
   const entryRanges = useAppStore((s) => s.taskEntryRanges);
@@ -48,12 +51,28 @@ export function GanttChart({ filterGroupIds, restrictToTaskIds }: GanttChartProp
   const [newTicketTitle, setNewTicketTitle] = useState("");
   const [leftPaneWidth, setLeftPaneWidth] = useState(DEFAULT_LEFT_PANE_WIDTH);
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const prevRangeFromRef = useRef<number | null>(null);
 
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const groups = useMemo(() => {
     const all = groupTickets(tasks, ticketSortMode);
     return all
       .filter((g) => filterGroupIds.size === 0 || filterGroupIds.has(g.ticket.groupId ?? "__none__"))
+      .filter((g) => excludeDone !== true || g.ticket.status !== "done")
+      .map((g) =>
+        excludeDone !== true
+          ? g
+          : {
+              ticket: g.ticket,
+              children: g.children
+                .filter((c) => c.status !== "done")
+                .map((c) => ({
+                  ...c,
+                  children: c.children.filter((gc) => gc.status !== "done"),
+                })),
+            },
+      )
       .map((g) =>
         restrictToTaskIds === undefined
           ? g
@@ -73,7 +92,7 @@ export function GanttChart({ filterGroupIds, restrictToTaskIds }: GanttChartProp
           restrictToTaskIds.has(g.ticket.id) ||
           g.children.length > 0,
       );
-  }, [tasks, filterGroupIds, restrictToTaskIds, ticketSortMode]);
+  }, [tasks, filterGroupIds, restrictToTaskIds, ticketSortMode, excludeDone]);
   const today = new Date();
 
   const range = useMemo(() => {
@@ -90,6 +109,43 @@ export function GanttChart({ filterGroupIds, restrictToTaskIds }: GanttChartProp
   const timelineWidth = range.totalDays * DAY_WIDTH;
   const todayPos = todayOffset(range, today);
   const paneWidth = Math.max(ganttMinLeftPaneWidth, Math.min(MAX_LEFT_PANE_WIDTH, leftPaneWidth));
+
+  // 初期表示は「今日 - offset」を左端に。範囲の先頭が過去へ伸びたときは
+  // 見えている日付が動かないようスクロール位置を補正する
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el === null) return;
+    const fromMs = range.from.getTime();
+    const prev = prevRangeFromRef.current;
+    prevRangeFromRef.current = fromMs;
+    if (prev === null) {
+      el.scrollLeft = initialScrollOffsetDays(range, today, ganttStartOffsetDays) * DAY_WIDTH;
+    } else if (prev !== fromMs) {
+      el.scrollLeft += Math.round((prev - fromMs) / 86_400_000) * DAY_WIDTH;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range, ganttStartOffsetDays]);
+
+  // 通常のホイール操作を横スクロールに変換する（端に達したら縦スクロールへ委譲）
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el === null) return;
+    const onWheel = (e: WheelEvent) => {
+      // shift+ホイールは標準の横スクロール、ctrl はズーム系ジェスチャなので触らない
+      if (e.shiftKey || e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      const max = el.scrollWidth - el.clientWidth;
+      if (max <= 0) return;
+      // 端では縦スクロールへ委譲（fractional DPI で scrollLeft が max に届かないことがあるため 1px の許容）
+      if ((e.deltaY > 0 && el.scrollLeft >= max - 1) || (e.deltaY < 0 && el.scrollLeft <= 1)) {
+        return;
+      }
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    };
+    // React の onWheel は passive のため preventDefault できない。native で登録する
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
 
   const toggleExpand = (id: string) =>
     setCollapsedIds((prev) => {
@@ -157,20 +213,26 @@ export function GanttChart({ filterGroupIds, restrictToTaskIds }: GanttChartProp
 
   const leftStyle = { width: paneWidth };
 
+  // 左ペイン右端のリサイズハンドル。ヘッダー行だけでなく全行に描画し、列の縁全体をドラッグ可能にする
+  const resizeHandle = (
+    <span
+      className="gantt-resize-handle"
+      onPointerDown={startResize}
+      onPointerMove={onResizeMove}
+      onPointerUp={endResize}
+      onPointerCancel={endResize}
+      title="ドラッグで幅を調整"
+    />
+  );
+
   return (
     <div className="gantt">
-      <div className="gantt-scroll">
+      <div className="gantt-scroll" ref={scrollRef}>
         <div style={{ width: paneWidth + timelineWidth }}>
           <div className="gantt-header-row">
             <div className="gantt-left gantt-left-head" style={leftStyle}>
               チケット
-              <span
-                className="gantt-resize-handle"
-                onPointerDown={startResize}
-                onPointerMove={onResizeMove}
-                onPointerUp={endResize}
-                title="ドラッグで幅を調整"
-              />
+              {resizeHandle}
             </div>
             <div className="gantt-timeline gantt-months" style={{ width: timelineWidth }}>
               {months.map((m) => (
@@ -185,7 +247,9 @@ export function GanttChart({ filterGroupIds, restrictToTaskIds }: GanttChartProp
             </div>
           </div>
           <div className="gantt-header-row">
-            <div className="gantt-left gantt-left-head" style={leftStyle} />
+            <div className="gantt-left gantt-left-head" style={leftStyle}>
+              {resizeHandle}
+            </div>
             <div className="gantt-timeline gantt-days" style={{ width: timelineWidth }}>
               {days.map((d) => {
                 const dow = d.getDay();
@@ -223,6 +287,7 @@ export function GanttChart({ filterGroupIds, restrictToTaskIds }: GanttChartProp
                   color={colorOf(group.ticket)}
                   entryRange={entryRanges.get(group.ticket.id)}
                   fillRatio={actualFillRatio(rollupActual, rollupEstimate)}
+                  resizeHandle={resizeHandle}
                   onUpdate={updateTask}
                   onAddChild={() => {
                     const name = window.prompt("タスク名を入力してください");
@@ -259,6 +324,7 @@ export function GanttChart({ filterGroupIds, restrictToTaskIds }: GanttChartProp
                             actualMinutes.get(child.id) ?? 0,
                             child.estimateMinutes,
                           )}
+                          resizeHandle={resizeHandle}
                           onUpdate={updateTask}
                           onAddChild={() => {
                             const name = window.prompt("タスク名を入力してください");
@@ -287,6 +353,7 @@ export function GanttChart({ filterGroupIds, restrictToTaskIds }: GanttChartProp
                                 actualMinutes.get(grandchild.id) ?? 0,
                                 grandchild.estimateMinutes,
                               )}
+                              resizeHandle={resizeHandle}
                               onUpdate={updateTask}
                               onDelete={() => confirmDeleteChild(grandchild)}
                             />
@@ -326,6 +393,7 @@ export function GanttChart({ filterGroupIds, restrictToTaskIds }: GanttChartProp
                   + チケットを追加
                 </button>
               )}
+              {resizeHandle}
             </div>
             <GanttRowTimeline width={timelineWidth} todayPos={todayPos} />
           </div>
@@ -365,6 +433,8 @@ interface GanttRowProps {
   entryRange: { from: string; to: string } | undefined;
   /** 見積に対する実績の割合（0-1）。見積未設定なら null（バー内の実績表示なし） */
   fillRatio: number | null;
+  /** 左ペイン右端のリサイズハンドル（親で生成した共通要素） */
+  resizeHandle: React.ReactNode;
   onUpdate: (task: Task) => Promise<void>;
   onAddChild?: () => void;
   onDelete: () => void;
@@ -390,6 +460,7 @@ function GanttRow({
   color,
   entryRange,
   fillRatio,
+  resizeHandle,
   onUpdate,
   onAddChild,
   onDelete,
@@ -483,6 +554,7 @@ function GanttRow({
         >
           ×
         </button>
+        {resizeHandle}
       </div>
       <div
         className="gantt-timeline gantt-row-timeline"

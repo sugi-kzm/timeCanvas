@@ -4,31 +4,38 @@ import type { TimeEntry } from "../../types";
 import { listEntriesBetween } from "../../db/entryRepo";
 import { computeWeekSummary } from "../../lib/summary";
 import {
-  buildYearHeatmap,
+  analyticsPeriodRange,
+  buildHourDowHeatmap,
+  buildPeriodStackedBars,
   categoryEstimateFactors,
   compareEstimates,
+  comparePeriods,
   estimateAccuracy,
-  minutesByDay,
+  previousPeriodAnchor,
+  type AnalyticsPeriodKind,
 } from "../../lib/analytics";
-import {
-  addDays,
-  calendarLabel,
-  calendarRange,
-  formatHours,
-  shiftAnchor,
-  startOfWeek,
-  toLocalIso,
-} from "../../lib/dates";
-import { IconChevronLeft, IconChevronRight } from "../icons";
+import { calendarLabel, formatHours, shiftAnchor, toLocalIso } from "../../lib/dates";
+import { IconArrowLeft, IconArrowRight } from "../icons";
+import { StackedBarChart } from "./StackedBarChart";
+import { HourDowChart } from "./HourDowChart";
 
-type PeriodKind = "week" | "month" | "year";
+type PeriodKind = AnalyticsPeriodKind;
 
-const HEAT_COLORS = ["#EBEBEA", "#C8E1F8", "#8FC3F0", "#4D9EE6", "#1A6DC0"];
+const PREVIOUS_LABEL: Record<PeriodKind, string> = {
+  week: "前週比",
+  month: "前月比",
+  year: "前年比",
+};
 
 function periodLabel(kind: PeriodKind, anchor: Date, weekStartsOn: 0 | 1): string {
   if (kind === "week") return calendarLabel("week", anchor, weekStartsOn);
   if (kind === "month") return calendarLabel("month", anchor);
   return `${anchor.getFullYear()}年`;
+}
+
+function formatDelta(minutes: number): string {
+  const sign = minutes >= 0 ? "+" : "-";
+  return `${sign}${formatHours(Math.abs(minutes))}h`;
 }
 
 export function AnalyticsView() {
@@ -41,40 +48,48 @@ export function AnalyticsView() {
   const [periodKind, setPeriodKind] = useState<PeriodKind>("week");
   const [anchor, setAnchor] = useState(new Date());
   const [periodEntries, setPeriodEntries] = useState<TimeEntry[]>([]);
-  const [yearEntries, setYearEntries] = useState<TimeEntry[]>([]);
+  const [previousEntries, setPreviousEntries] = useState<TimeEntry[]>([]);
 
-  // 期間集計用のエントリ読み込み
+  // 現期間と前期間（前期間比用）のエントリ読み込み。
+  // 期間を素早く切り替えたとき、古い応答が新しい応答を上書きしないようキャンセルフラグで守る
   useEffect(() => {
-    const range =
-      periodKind === "year"
-        ? {
-            from: new Date(anchor.getFullYear(), 0, 1),
-            to: new Date(anchor.getFullYear() + 1, 0, 1),
-          }
-        : calendarRange(periodKind, anchor, weekStartsOn);
-    listEntriesBetween(toLocalIso(range.from), toLocalIso(range.to))
-      .then(setPeriodEntries)
-      .catch((e) => setStatus(`集計データの読み込みに失敗しました: ${String(e)}`));
+    let cancelled = false;
+    const range = analyticsPeriodRange(periodKind, anchor, weekStartsOn);
+    const prevRange = analyticsPeriodRange(
+      periodKind,
+      previousPeriodAnchor(periodKind, anchor),
+      weekStartsOn,
+    );
+    Promise.all([
+      listEntriesBetween(toLocalIso(range.from), toLocalIso(range.to)),
+      listEntriesBetween(toLocalIso(prevRange.from), toLocalIso(prevRange.to)),
+    ])
+      .then(([current, previous]) => {
+        if (cancelled) return;
+        setPeriodEntries(current);
+        setPreviousEntries(previous);
+      })
+      .catch((e) => {
+        if (!cancelled) setStatus(`集計データの読み込みに失敗しました: ${String(e)}`);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [periodKind, anchor, weekStartsOn, setStatus]);
-
-  // ヒートマップ用に表示年の全エントリを読み込み（グリッドは前後年に少しはみ出す）
-  const year = anchor.getFullYear();
-  useEffect(() => {
-    const from = startOfWeek(new Date(year, 0, 1), weekStartsOn);
-    const to = addDays(new Date(year, 11, 31), 7);
-    listEntriesBetween(toLocalIso(from), toLocalIso(to))
-      .then(setYearEntries)
-      .catch((e) => setStatus(`年間データの読み込みに失敗しました: ${String(e)}`));
-  }, [year, weekStartsOn, setStatus]);
 
   const summary = useMemo(
     () => computeWeekSummary(periodEntries, categories),
     [periodEntries, categories],
   );
-  const heatmapWeeks = useMemo(
-    () => buildYearHeatmap(year, minutesByDay(yearEntries), weekStartsOn),
-    [year, yearEntries, weekStartsOn],
+  const comparison = useMemo(
+    () => comparePeriods(periodEntries, previousEntries, categories),
+    [periodEntries, previousEntries, categories],
   );
+  const stackedBars = useMemo(
+    () => buildPeriodStackedBars(periodKind, anchor, weekStartsOn, periodEntries, categories),
+    [periodKind, anchor, weekStartsOn, periodEntries, categories],
+  );
+  const hourDow = useMemo(() => buildHourDowHeatmap(periodEntries), [periodEntries]);
   const comparisons = useMemo(
     () => compareEstimates(tasks, taskActualMinutes),
     [tasks, taskActualMinutes],
@@ -104,10 +119,10 @@ export function AnalyticsView() {
             今日
           </button>
           <button type="button" className="btn icon-btn" aria-label="前へ" onClick={() => shift(-1)}>
-            <IconChevronLeft />
+            <IconArrowLeft size={16} />
           </button>
           <button type="button" className="btn icon-btn" aria-label="次へ" onClick={() => shift(1)}>
-            <IconChevronRight />
+            <IconArrowRight size={16} />
           </button>
           <span className="analytics-period-label">
             {periodLabel(periodKind, anchor, weekStartsOn)}
@@ -133,11 +148,42 @@ export function AnalyticsView() {
           </div>
         </div>
 
+        {/* 合計と前期間比のサマリー */}
+        <section className="analytics-section">
+          <div className="analytics-summary-row">
+            <span className="analytics-summary-total">
+              合計 <strong>{formatHours(comparison.currentTotal)}</strong> 時間
+            </span>
+            <span className={`delta-chip ${comparison.deltaMinutes >= 0 ? "up" : "down"}`}>
+              {PREVIOUS_LABEL[periodKind]} {formatDelta(comparison.deltaMinutes)}
+              {comparison.deltaRatio !== null &&
+                ` (${comparison.deltaRatio >= 0 ? "+" : "-"}${Math.abs(
+                  Math.round(comparison.deltaRatio * 100),
+                )}%)`}
+            </span>
+          </div>
+          {comparison.byCategory.length > 0 && (
+            <div className="delta-category-row">
+              {comparison.byCategory.slice(0, 6).map((c) => (
+                <span key={c.categoryId ?? "none"} className="delta-category-chip">
+                  <span className="category-dot" style={{ background: c.color }} />
+                  {c.name} {formatDelta(c.deltaMinutes)}
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* コアレポート: 日別（年は月別）のカテゴリ積み上げ棒 */}
+        <section className="analytics-section">
+          <h3 className="analytics-heading">
+            {periodKind === "year" ? "月別の記録時間" : "日別の記録時間"}
+          </h3>
+          <StackedBarChart bars={stackedBars} labelEvery={periodKind === "month" ? 5 : 1} />
+        </section>
+
         <section className="analytics-section">
           <h3 className="analytics-heading">カテゴリ別の時間</h3>
-          <p className="analytics-total">
-            合計 <strong>{formatHours(summary.totalMinutes)}</strong> 時間
-          </p>
           {summary.byCategory.length === 0 ? (
             <p className="tasks-empty">この期間の記録はありません</p>
           ) : (
@@ -164,6 +210,12 @@ export function AnalyticsView() {
               ))}
             </ul>
           )}
+        </section>
+
+        {/* どの時間帯に活動しているか */}
+        <section className="analytics-section">
+          <h3 className="analytics-heading">時間帯×曜日の分布</h3>
+          <HourDowChart data={hourDow} />
         </section>
 
         <section className="analytics-section">
@@ -248,32 +300,6 @@ export function AnalyticsView() {
           )}
         </section>
 
-        <section className="analytics-section">
-          <h3 className="analytics-heading">{year}年の記録ヒートマップ</h3>
-          <div className="heatmap-scroll">
-            <div className="heatmap">
-              {heatmapWeeks.map((week, wi) => (
-                <div key={wi} className="heatmap-week">
-                  {week.map((cell) => (
-                    <span
-                      key={cell.key}
-                      className={`heatmap-cell ${cell.inYear ? "" : "outside"}`}
-                      style={{ background: cell.inYear ? HEAT_COLORS[cell.level] : "transparent" }}
-                      title={`${cell.key}: ${formatHours(cell.minutes)}時間`}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="heatmap-legend">
-            <span>少</span>
-            {HEAT_COLORS.map((color) => (
-              <span key={color} className="heatmap-cell" style={{ background: color }} />
-            ))}
-            <span>多</span>
-          </div>
-        </section>
       </div>
     </div>
   );
