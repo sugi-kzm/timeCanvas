@@ -126,3 +126,15 @@ export function todayOffset(range: GanttRange, today: Date): number | null {
 export function toDateString(d: Date): string {
   return toLocalIso(d).slice(0, 10);
 }
+
+/**
+ * 見積に対する実績の割合（0-1）。
+ * 見積が未設定・0 のときは描画対象がないので null を返す。
+ */
+export function actualFillRatio(
+  actualMinutes: number,
+  estimateMinutes: number | null,
+): number | null {
+  if (estimateMinutes === null || estimateMinutes <= 0) return null;
+  return Math.min(1, actualMinutes / estimateMinutes);
+}

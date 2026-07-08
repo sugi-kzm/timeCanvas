@@ -1,19 +1,26 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCategoryHeatmaps,
   buildYearHeatmap,
   categoryEstimateFactors,
   compareEstimates,
   estimateAccuracy,
   heatmapLevel,
   minutesByDay,
+  minutesByDayAndCategory,
 } from "./analytics";
 import type { Category, Task, TimeEntry } from "../types";
 
-function makeEntry(id: string, startAt: string, endAt: string): TimeEntry {
+function makeEntry(
+  id: string,
+  startAt: string,
+  endAt: string,
+  categoryId: string | null = null,
+): TimeEntry {
   return {
     id,
     title: `entry-${id}`,
-    categoryId: null,
+    categoryId,
     startAt,
     endAt,
     memo: "",
@@ -32,6 +39,7 @@ function makeTask(
 ): Task {
   return {
     id,
+    displayNo: 1,
     title: `task-${id}`,
     memo: "",
     categoryId,
@@ -163,5 +171,52 @@ describe("categoryEstimateFactors", () => {
 
   it("対象がなければ空配列", () => {
     expect(categoryEstimateFactors([], new Map(), [dev])).toEqual([]);
+  });
+});
+
+describe("minutesByDayAndCategory", () => {
+  it("日付・カテゴリごとに分数を合算する", () => {
+    const map = minutesByDayAndCategory([
+      makeEntry("1", "2026-07-02T09:00:00", "2026-07-02T10:00:00", "dev"),
+      makeEntry("2", "2026-07-02T13:00:00", "2026-07-02T13:30:00", "dev"),
+      makeEntry("3", "2026-07-02T09:00:00", "2026-07-02T09:15:00", null),
+    ]);
+    const day = map.get("2026-07-02");
+    expect(day?.get("dev")).toBe(90);
+    expect(day?.get(null)).toBe(15);
+  });
+});
+
+describe("buildCategoryHeatmaps", () => {
+  const dev: Category = {
+    id: "dev",
+    name: "開発",
+    color: "#2564CF",
+    archived: false,
+    sortOrder: 0,
+    createdAt: "2026-01-01T00:00:00",
+  };
+
+  it("使われているカテゴリごとにヒートマップを分けて作る", () => {
+    const byDayCategory = minutesByDayAndCategory([
+      makeEntry("1", "2026-07-02T09:00:00", "2026-07-02T10:00:00", "dev"),
+      makeEntry("2", "2026-07-03T09:00:00", "2026-07-03T09:15:00", null),
+    ]);
+    const from = new Date(2026, 6, 1);
+    const to = new Date(2026, 6, 8);
+    const heatmaps = buildCategoryHeatmaps(from, to, byDayCategory, [dev]);
+    expect(heatmaps.map((h) => h.categoryId).sort()).toEqual([null, "dev"].sort());
+    const devHeatmap = heatmaps.find((h) => h.categoryId === "dev");
+    const cell = devHeatmap?.weeks.flat().find((c) => c.key === "2026-07-02");
+    expect(cell?.minutes).toBe(60);
+    expect(cell?.level).toBe(1);
+    const none = heatmaps.find((h) => h.categoryId === null);
+    expect(none?.name).toBe("未分類");
+  });
+
+  it("記録がなければ空配列", () => {
+    const from = new Date(2026, 6, 1);
+    const to = new Date(2026, 6, 8);
+    expect(buildCategoryHeatmaps(from, to, new Map(), [dev])).toEqual([]);
   });
 });

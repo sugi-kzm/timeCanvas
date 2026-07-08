@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { groupCompletedByYearMonth, monthLabel } from "./history";
+import {
+  completedTasksInPeriod,
+  periodForAnchor,
+  periodLabel,
+  shiftHistoryAnchor,
+} from "./history";
 import type { Task } from "../types";
 
 function makeTask(id: string, overrides: Partial<Task> = {}): Task {
   return {
     id,
+    displayNo: 1,
     title: `task-${id}`,
     memo: "",
     categoryId: null,
@@ -22,43 +28,74 @@ function makeTask(id: string, overrides: Partial<Task> = {}): Task {
   };
 }
 
-describe("groupCompletedByYearMonth", () => {
-  it("完了日の年月でグルーピングし、新しい順に並べる", () => {
-    const tasks = [
-      makeTask("a", { completedAt: "2026-07-02T10:00:00" }),
-      makeTask("b", { completedAt: "2026-07-15T10:00:00" }),
-      makeTask("c", { completedAt: "2026-05-01T10:00:00" }),
-      makeTask("d", { completedAt: "2025-12-31T10:00:00" }),
-    ];
-    const groups = groupCompletedByYearMonth(tasks, new Map());
-    expect(groups.map((g) => g.year)).toEqual([2026, 2025]);
-    expect(groups[0].months.map((m) => m.month)).toEqual([7, 5]);
-    expect(groups[0].months[0].items).toHaveLength(2);
-    expect(groups[1].months[0].month).toBe(12);
+describe("periodForAnchor", () => {
+  const anchor = new Date(2026, 6, 15); // 2026-07-15 (水)
+
+  it("week: 週の開始〜終了(含まない)を返す", () => {
+    const period = periodForAnchor("week", anchor, 0);
+    expect(period.from.getDate()).toBe(12); // 直近の日曜
+    expect(period.to.getTime() - period.from.getTime()).toBe(7 * 86_400_000);
   });
 
-  it("未完了・completedAt なしのタスクは除外する", () => {
-    const tasks = [
-      makeTask("open", { status: "todo", completedAt: null }),
-      makeTask("done1", { completedAt: "2026-07-01T00:00:00" }),
-    ];
-    const groups = groupCompletedByYearMonth(tasks, new Map());
-    expect(groups).toHaveLength(1);
-    expect(groups[0].count).toBe(1);
+  it("month: 月初〜翌月初を返す", () => {
+    const period = periodForAnchor("month", anchor);
+    expect(period.from).toEqual(new Date(2026, 6, 1));
+    expect(period.to).toEqual(new Date(2026, 7, 1));
   });
 
-  it("実績時間を合算する", () => {
+  it("year: 年始〜翌年始を返す", () => {
+    const period = periodForAnchor("year", anchor);
+    expect(period.from).toEqual(new Date(2026, 0, 1));
+    expect(period.to).toEqual(new Date(2027, 0, 1));
+  });
+});
+
+describe("shiftHistoryAnchor", () => {
+  const anchor = new Date(2026, 6, 15);
+
+  it("week: 7日単位で移動する", () => {
+    expect(shiftHistoryAnchor("week", anchor, 1).getDate()).toBe(22);
+    expect(shiftHistoryAnchor("week", anchor, -1).getDate()).toBe(8);
+  });
+
+  it("month: 月単位で移動する", () => {
+    expect(shiftHistoryAnchor("month", anchor, 1)).toEqual(new Date(2026, 7, 1));
+    expect(shiftHistoryAnchor("month", anchor, -1)).toEqual(new Date(2026, 5, 1));
+  });
+
+  it("year: 年単位で移動する", () => {
+    expect(shiftHistoryAnchor("year", anchor, 1)).toEqual(new Date(2027, 6, 1));
+    expect(shiftHistoryAnchor("year", anchor, -1)).toEqual(new Date(2025, 6, 1));
+  });
+});
+
+describe("periodLabel", () => {
+  const anchor = new Date(2026, 6, 15);
+
+  it("year: '2026年'", () => {
+    expect(periodLabel("year", anchor)).toBe("2026年");
+  });
+
+  it("month: '2026年7月'", () => {
+    expect(periodLabel("month", anchor)).toBe("2026年7月");
+  });
+
+  it("week: 期間の開始〜終了を含むラベル", () => {
+    expect(periodLabel("week", anchor)).toContain("月");
+  });
+});
+
+describe("completedTasksInPeriod", () => {
+  it("期間内に完了したタスクのみ返す", () => {
     const tasks = [
-      makeTask("a", { completedAt: "2026-07-01T00:00:00" }),
-      makeTask("b", { completedAt: "2026-07-05T00:00:00" }),
+      makeTask("in", { completedAt: "2026-07-15T10:00:00" }),
+      makeTask("before", { completedAt: "2026-06-30T23:59:59" }),
+      makeTask("after", { completedAt: "2026-08-01T00:00:00" }),
+      makeTask("notdone", { status: "todo", completedAt: null }),
     ];
-    const actual = new Map([
-      ["a", 60],
-      ["b", 90],
-    ]);
-    const groups = groupCompletedByYearMonth(tasks, actual);
-    expect(groups[0].months[0].totalActualMinutes).toBe(150);
-    expect(groups[0].totalActualMinutes).toBe(150);
+    const period = periodForAnchor("month", new Date(2026, 6, 1));
+    const result = completedTasksInPeriod(tasks, period);
+    expect(result.map((t) => t.id)).toEqual(["in"]);
   });
 
   it("分類で絞り込める", () => {
@@ -66,19 +103,8 @@ describe("groupCompletedByYearMonth", () => {
       makeTask("a", { completedAt: "2026-07-01T00:00:00", groupId: "g1" }),
       makeTask("b", { completedAt: "2026-07-01T00:00:00", groupId: "g2" }),
     ];
-    const groups = groupCompletedByYearMonth(tasks, new Map(), "g1");
-    expect(groups[0].count).toBe(1);
-    expect(groups[0].months[0].items[0].id).toBe("a");
-  });
-
-  it("対象がなければ空配列", () => {
-    expect(groupCompletedByYearMonth([], new Map())).toEqual([]);
-  });
-});
-
-describe("monthLabel", () => {
-  it("1〜12月のラベルを返す", () => {
-    expect(monthLabel(1)).toBe("1月");
-    expect(monthLabel(12)).toBe("12月");
+    const period = periodForAnchor("month", new Date(2026, 6, 1));
+    const result = completedTasksInPeriod(tasks, period, new Set(["g1"]));
+    expect(result.map((t) => t.id)).toEqual(["a"]);
   });
 });

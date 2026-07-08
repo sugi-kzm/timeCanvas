@@ -104,6 +104,18 @@ export async function listAllEntries(): Promise<TimeEntry[]> {
   return rows.map(rowToEntry);
 }
 
+/** 指定したタスクID群に紐づくエントリを取得 */
+export async function listEntriesForTaskIds(taskIds: string[]): Promise<TimeEntry[]> {
+  if (taskIds.length === 0) return [];
+  const db = await getDb();
+  const placeholders = taskIds.map((_, i) => `$${i + 1}`).join(", ");
+  const rows = await db.select<EntryRow[]>(
+    `SELECT * FROM time_entries WHERE task_id IN (${placeholders}) ORDER BY start_at`,
+    taskIds,
+  );
+  return rows.map(rowToEntry);
+}
+
 /** キーワード・カテゴリ・期間でエントリを検索する */
 export async function searchEntries(params: SearchParams): Promise<TimeEntry[]> {
   const db = await getDb();

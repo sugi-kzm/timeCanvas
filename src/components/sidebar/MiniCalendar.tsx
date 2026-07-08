@@ -26,58 +26,65 @@ export function MiniCalendar() {
     setMonthAnchor(new Date(anchorDate));
   }, [anchorDate]);
 
+  const compact = calendarMode === "day";
+
   const today = new Date();
   const weekStart = startOfWeek(anchorDate, weekStartsOn);
   const weekEndDow = (weekStartsOn + 6) % 7;
-  const days = useMemo(
+  const monthDays = useMemo(
     () => buildMonthGrid(monthAnchor, weekStartsOn),
     [monthAnchor, weekStartsOn],
   );
+  const days = compact
+    ? Array.from({ length: 21 }, (_, i) => addDays(addDays(weekStart, -7), i))
+    : monthDays;
   const options = useMemo(() => monthOptions(monthAnchor), [monthAnchor]);
 
   const isInSelectedWeek = (d: Date) =>
-    calendarMode === "week" && d >= weekStart && d < addDays(weekStart, 7);
+    (calendarMode === "week" || compact) && d >= weekStart && d < addDays(weekStart, 7);
 
   return (
-    <section className="mini-calendar" aria-label="ミニカレンダー">
-      <div className="mini-cal-header">
-        <select
-          className="mini-cal-select"
-          aria-label="年月を選択"
-          value={`${monthAnchor.getFullYear()}-${monthAnchor.getMonth() + 1}`}
-          onChange={(e) => {
-            const [y, m] = e.target.value.split("-").map(Number);
-            setMonthAnchor(new Date(y, m - 1, 1));
-          }}
-        >
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <span className="mini-cal-spacer" />
-        <button
-          type="button"
-          className="btn icon-btn small"
-          aria-label="前の月"
-          onClick={() =>
-            setMonthAnchor(new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() - 1, 1))
-          }
-        >
-          <IconChevronLeft size={14} />
-        </button>
-        <button
-          type="button"
-          className="btn icon-btn small"
-          aria-label="次の月"
-          onClick={() =>
-            setMonthAnchor(new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 1))
-          }
-        >
-          <IconChevronRight size={14} />
-        </button>
-      </div>
+    <section className={`mini-calendar ${compact ? "compact" : ""}`} aria-label="ミニカレンダー">
+      {!compact && (
+        <div className="mini-cal-header">
+          <select
+            className="mini-cal-select"
+            aria-label="年月を選択"
+            value={`${monthAnchor.getFullYear()}-${monthAnchor.getMonth() + 1}`}
+            onChange={(e) => {
+              const [y, m] = e.target.value.split("-").map(Number);
+              setMonthAnchor(new Date(y, m - 1, 1));
+            }}
+          >
+            {options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <span className="mini-cal-spacer" />
+          <button
+            type="button"
+            className="btn icon-btn small"
+            aria-label="前の月"
+            onClick={() =>
+              setMonthAnchor(new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() - 1, 1))
+            }
+          >
+            <IconChevronLeft size={14} />
+          </button>
+          <button
+            type="button"
+            className="btn icon-btn small"
+            aria-label="次の月"
+            onClick={() =>
+              setMonthAnchor(new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 1))
+            }
+          >
+            <IconChevronRight size={14} />
+          </button>
+        </div>
+      )}
       <div className="mini-cal-grid">
         {dowLabels(weekStartsOn).map((label) => (
           <span key={label} className="mini-cal-dow">
@@ -86,7 +93,7 @@ export function MiniCalendar() {
         ))}
         {days.map((d) => {
           const classes = ["mini-cal-day"];
-          if (d.getMonth() !== monthAnchor.getMonth()) classes.push("outside");
+          if (!compact && d.getMonth() !== monthAnchor.getMonth()) classes.push("outside");
           if (isInSelectedWeek(d)) {
             classes.push("in-week");
             if (d.getDay() === weekStartsOn) classes.push("week-first");

@@ -10,6 +10,7 @@ import {
   durationMinutes,
   formatMinutesHm,
   fromLocalIso,
+  dateKey,
   isSameDay,
   minutesOfDay,
   snapMinutes,
@@ -19,16 +20,15 @@ import {
 } from "../../lib/dates";
 import { layoutOverlaps, type Positioned } from "../../lib/layout";
 import { EntryBlock, type EntryDragMode } from "./EntryBlock";
+import { EntryContextMenu, type EntryContextMenuState } from "./EntryContextMenu";
 
-/** グリッドの寸法は固定（Outlook 同様、ウィンドウサイズに追従して伸縮しない） */
+/** 高さは固定（Outlook 同様、ウィンドウサイズに追従して伸縮しない）。列幅は週表示のみ可変 */
 export const HOUR_HEIGHT = 80;
+/** 週表示の列幅のフォールバック値（ResizeObserver 反映前の初期値） */
 export const DAY_WIDTH = 150;
-/** 日表示のときの1列の幅 */
-export const DAY_WIDTH_SINGLE = 480;
 const PX_PER_MIN = HOUR_HEIGHT / 60;
 const MIN_DURATION = 15;
 const CLICK_DEFAULT_DURATION = 30;
-const INITIAL_SCROLL_HOUR = 7;
 
 type DragState =
   | {
@@ -58,9 +58,10 @@ interface DayEntryPosition {
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 export function WeekView() {
-  const calendarMode = useAppStore((s) => s.calendarMode);
   const anchorDate = useAppStore((s) => s.anchorDate);
   const weekStartsOn = useAppStore((s) => s.weekStartsOn);
+  const showWeekends = useAppStore((s) => s.showWeekends);
+  const scheduleStartHour = useAppStore((s) => s.scheduleStartHour);
   const entries = useAppStore((s) => s.entries);
   const categories = useAppStore((s) => s.categories);
   const hiddenIds = useAppStore((s) => s.hiddenCategoryIds);
@@ -78,14 +79,30 @@ export function WeekView() {
   const dragRef = useRef<DragState | null>(null);
   dragRef.current = drag;
   const [now, setNow] = useState(new Date());
+  const [dayWidth, setDayWidth] = useState(DAY_WIDTH);
+  const [contextMenu, setContextMenu] = useState<EntryContextMenuState | null>(null);
 
   const days = useMemo(() => {
-    if (calendarMode === "day") return [startOfDay(anchorDate)];
     const weekStart = startOfWeek(anchorDate, weekStartsOn);
-    return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  }, [calendarMode, anchorDate, weekStartsOn]);
+    const week = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+    if (!showWeekends) {
+      return week.filter((d) => d.getDay() !== 0 && d.getDay() !== 6);
+    }
+    return week;
+  }, [anchorDate, weekStartsOn, showWeekends]);
 
-  const dayWidth = calendarMode === "day" ? DAY_WIDTH_SINGLE : DAY_WIDTH;
+  useEffect(() => {
+    const el = columnsRef.current;
+    if (el === null) return;
+    const updateWidth = () => {
+      const perColumn = el.clientWidth / days.length;
+      if (perColumn > 0) setDayWidth(perColumn);
+    };
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [days.length]);
 
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
@@ -112,7 +129,8 @@ export function WeekView() {
   }, [days, visibleEntries]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo(0, INITIAL_SCROLL_HOUR * HOUR_HEIGHT);
+    scrollRef.current?.scrollTo(0, scheduleStartHour * HOUR_HEIGHT);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -215,6 +233,7 @@ export function WeekView() {
         });
       } else if (!current.moved) {
         selectEntry(current.entry.id);
+        openEditor({ mode: "edit", entry: current.entry });
       } else {
         const targetDay =
           current.kind === "move" ? days[current.dayIndex] : fromLocalIso(current.entry.startAt);
@@ -265,7 +284,6 @@ export function WeekView() {
             <div
               key={day.toDateString()}
               className={`day-head ${isSameDay(day, now) ? "today" : ""}`}
-              style={{ width: dayWidth }}
             >
               <span className="day-head-dow">{DOW_LABELS[day.getDay()]}</span>
               <span className="day-head-date">{day.getDate()}</span>
@@ -304,7 +322,7 @@ export function WeekView() {
                 <div
                   key={day.toDateString()}
                   className={`day-column ${dayIndex % 2 === 1 ? "alt" : ""} ${isToday ? "today" : ""}`}
-                  style={{ width: dayWidth }}
+                  data-day-key={dateKey(day)}
                 >
                   {HOURS.map((h) => (
                     <div key={h} className="hour-cell" style={{ height: HOUR_HEIGHT }} />
@@ -327,6 +345,9 @@ export function WeekView() {
                         selected={p.entry.id === selectedEntryId}
                         onDragInit={startEntryDrag}
                         onOpen={(entry) => openEditor({ mode: "edit", entry })}
+                        onContextMenu={(entry, e) =>
+                          setContextMenu({ entryId: entry.id, x: e.clientX, y: e.clientY })
+                        }
                       />
                     );
                   })}
@@ -375,6 +396,9 @@ export function WeekView() {
           </div>
         </div>
       </div>
+      {contextMenu !== null && (
+        <EntryContextMenu state={contextMenu} onClose={() => setContextMenu(null)} />
+      )}
     </div>
   );
 }

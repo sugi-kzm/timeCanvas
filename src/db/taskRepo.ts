@@ -5,6 +5,7 @@ import { getDb } from "./database";
 
 interface TaskRow {
   id: string;
+  display_no: number;
   title: string;
   memo: string;
   category_id: string | null;
@@ -23,6 +24,7 @@ interface TaskRow {
 function rowToTask(row: TaskRow): Task {
   return {
     id: row.id,
+    displayNo: row.display_no,
     title: row.title,
     memo: row.memo,
     categoryId: row.category_id,
@@ -56,27 +58,40 @@ export async function listTasks(): Promise<Task[]> {
   return [...rows, ...doneRows].map(rowToTask);
 }
 
+export interface CreateTaskOverrides {
+  memo?: string;
+  estimateMinutes?: number | null;
+  status?: Task["status"];
+  startDate?: string | null;
+  dueDate?: string | null;
+}
+
 export async function createTask(
   title: string,
   categoryId: string | null,
   parentId: string | null = null,
   groupId: string | null = null,
+  overrides: CreateTaskOverrides = {},
 ): Promise<Task> {
   const db = await getDb();
   const now = toLocalIso(new Date());
   const maxRows = await db.select<{ max_order: number | null }[]>(
     "SELECT MAX(sort_order) AS max_order FROM tasks",
   );
+  const maxDisplayNoRows = await db.select<{ max_display_no: number | null }[]>(
+    "SELECT MAX(display_no) AS max_display_no FROM tasks",
+  );
   const task: Task = {
     id: crypto.randomUUID(),
+    displayNo: (maxDisplayNoRows[0]?.max_display_no ?? 0) + 1,
     title,
-    memo: "",
+    memo: overrides.memo ?? "",
     categoryId,
     groupId,
-    estimateMinutes: null,
-    status: "todo",
-    startDate: null,
-    dueDate: null,
+    estimateMinutes: overrides.estimateMinutes ?? null,
+    status: overrides.status ?? "todo",
+    startDate: overrides.startDate ?? null,
+    dueDate: overrides.dueDate ?? null,
     parentId,
     sortOrder: (maxRows[0]?.max_order ?? -1) + 1,
     createdAt: now,
@@ -84,10 +99,11 @@ export async function createTask(
     completedAt: null,
   };
   await db.execute(
-    `INSERT INTO tasks (id, title, memo, category_id, group_id, estimate_minutes, status, due_date, parent_id, start_date, sort_order, created_at, updated_at, completed_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+    `INSERT INTO tasks (id, display_no, title, memo, category_id, group_id, estimate_minutes, status, due_date, parent_id, start_date, sort_order, created_at, updated_at, completed_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
     [
       task.id,
+      task.displayNo,
       task.title,
       task.memo,
       task.categoryId,
@@ -132,6 +148,16 @@ export async function updateTask(task: Task): Promise<Task> {
     ],
   );
   return updated;
+}
+
+/** 手動並び替え用。渡された順番どおりに sort_order を振り直す（全行を無条件で上書きする） */
+export async function updateSortOrders(idsInOrder: readonly string[]): Promise<void> {
+  const db = await getDb();
+  await Promise.all(
+    idsInOrder.map((id, index) =>
+      db.execute("UPDATE tasks SET sort_order = $1 WHERE id = $2", [index, id]),
+    ),
+  );
 }
 
 /**

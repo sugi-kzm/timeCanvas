@@ -15,8 +15,8 @@ function completedThisMonth(task: Task, now: Date): boolean {
 }
 
 interface KanbanBoardProps {
-  /** null = すべて表示。分類 ID で絞り込み */
-  filterGroupId: string | null;
+  /** 空集合 = すべて表示。分類 ID（"__none__" はなし）の集合で絞り込み */
+  filterGroupIds: ReadonlySet<string>;
 }
 
 /**
@@ -24,7 +24,7 @@ interface KanbanBoardProps {
  * ここに載るのは実際の作業単位である「子タスク」のみ。
  * チケット（親）そのものや新規チケットの作成は「チケット」タブで行う。
  */
-export function KanbanBoard({ filterGroupId }: KanbanBoardProps) {
+export function KanbanBoard({ filterGroupIds }: KanbanBoardProps) {
   const tasks = useAppStore((s) => s.tasks);
   const categories = useAppStore((s) => s.categories);
   const actualMinutes = useAppStore((s) => s.taskActualMinutes);
@@ -49,10 +49,10 @@ export function KanbanBoard({ filterGroupId }: KanbanBoardProps) {
       tasks.filter(
         (t) =>
           t.parentId !== null &&
-          (filterGroupId === null || t.groupId === filterGroupId) &&
+          (filterGroupIds.size === 0 || filterGroupIds.has(t.groupId ?? "__none__")) &&
           completedThisMonth(t, now),
       ),
-    [tasks, filterGroupId, now],
+    [tasks, filterGroupIds, now],
   );
 
   const byStatus = useMemo(() => {
@@ -144,7 +144,7 @@ export function KanbanBoard({ filterGroupId }: KanbanBoardProps) {
                         className="category-dot"
                         style={{ background: category?.color ?? UNCATEGORIZED_COLOR }}
                       />
-                      {category?.name ?? "未分類"}
+                      <span className="kanban-card-category">{category?.name ?? "未分類"}</span>
                       {(card.estimateMinutes !== null || actual > 0) && (
                         <span className="kanban-card-hours">
                           {actual > 0 ? `${formatHours(actual)}h` : "-"}

@@ -130,6 +130,20 @@ fn migrations() -> Vec<Migration> {
         ",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "add_task_display_no",
+            sql: "
+            ALTER TABLE tasks ADD COLUMN display_no INTEGER;
+            UPDATE tasks SET display_no = (
+                SELECT COUNT(*) FROM tasks t2
+                WHERE t2.created_at < tasks.created_at
+                   OR (t2.created_at = tasks.created_at AND t2.id <= tasks.id)
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_display_no ON tasks(display_no);
+        ",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -142,6 +156,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::default().build())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations(DB_URL, migrations())

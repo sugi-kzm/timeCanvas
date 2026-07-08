@@ -301,7 +301,7 @@ export function NotesView() {
       onFocus={(e) => e.target.select()}
       onKeyDown={(e) => {
         e.stopPropagation();
-        if (e.key === "Enter") onCommit(e.currentTarget.value);
+        if (e.key === "Enter" && !e.nativeEvent.isComposing) onCommit(e.currentTarget.value);
         if (e.key === "Escape") onCancel();
       }}
       onBlur={(e) => onCommit(e.target.value)}

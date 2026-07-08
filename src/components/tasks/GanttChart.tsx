@@ -2,11 +2,12 @@ import { useMemo, useRef, useState } from "react";
 import { useAppStore } from "../../store/appStore";
 import { confirmDialog } from "../../store/confirmStore";
 import type { Task } from "../../types";
-import { groupTickets } from "../../lib/tickets";
+import { groupTickets, rollupActualMinutes, rollupEstimateMinutes } from "../../lib/tickets";
 import { statusConfig } from "../../lib/status";
 import { UNCATEGORIZED_COLOR } from "../../lib/summary";
 import { isSameDay } from "../../lib/dates";
 import {
+  actualFillRatio,
   computeGanttRange,
   dayCells,
   monthSegments,
@@ -24,16 +25,20 @@ const DEFAULT_LEFT_PANE_WIDTH = 300;
 const MAX_LEFT_PANE_WIDTH = 600;
 
 interface GanttChartProps {
-  /** null = すべて表示。分類 ID で絞り込み */
-  filterGroupId: string | null;
+  /** 空集合 = すべて表示。分類 ID（"__none__" はなし）の集合で絞り込み */
+  filterGroupIds: ReadonlySet<string>;
+  /** 指定時、このチケット/タスク ID のみ表示する（履歴ビューなど期間で絞り込む場合に使う） */
+  restrictToTaskIds?: ReadonlySet<string>;
 }
 
-export function GanttChart({ filterGroupId }: GanttChartProps) {
+export function GanttChart({ filterGroupIds, restrictToTaskIds }: GanttChartProps) {
   const tasks = useAppStore((s) => s.tasks);
   const categories = useAppStore((s) => s.categories);
   const entryRanges = useAppStore((s) => s.taskEntryRanges);
+  const actualMinutes = useAppStore((s) => s.taskActualMinutes);
   const ganttStartOffsetDays = useAppStore((s) => s.ganttStartOffsetDays);
   const ganttMinLeftPaneWidth = useAppStore((s) => s.ganttMinLeftPaneWidth);
+  const ticketSortMode = useAppStore((s) => s.ticketSortMode);
   const updateTask = useAppStore((s) => s.updateTask);
   const addTask = useAppStore((s) => s.addTask);
   const removeTask = useAppStore((s) => s.removeTask);
@@ -46,15 +51,34 @@ export function GanttChart({ filterGroupId }: GanttChartProps) {
 
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const groups = useMemo(() => {
-    const all = groupTickets(tasks);
-    if (filterGroupId === null) return all;
-    return all.filter((g) => g.ticket.groupId === filterGroupId);
-  }, [tasks, filterGroupId]);
+    const all = groupTickets(tasks, ticketSortMode);
+    return all
+      .filter((g) => filterGroupIds.size === 0 || filterGroupIds.has(g.ticket.groupId ?? "__none__"))
+      .map((g) =>
+        restrictToTaskIds === undefined
+          ? g
+          : {
+              ticket: g.ticket,
+              children: g.children
+                .map((c) => ({
+                  ...c,
+                  children: c.children.filter((gc) => restrictToTaskIds.has(gc.id)),
+                }))
+                .filter((c) => restrictToTaskIds.has(c.id) || c.children.length > 0),
+            },
+      )
+      .filter(
+        (g) =>
+          restrictToTaskIds === undefined ||
+          restrictToTaskIds.has(g.ticket.id) ||
+          g.children.length > 0,
+      );
+  }, [tasks, filterGroupIds, restrictToTaskIds, ticketSortMode]);
   const today = new Date();
 
   const range = useMemo(() => {
     const spans = groups
-      .flatMap((g) => [g.ticket, ...g.children])
+      .flatMap((g) => [g.ticket, ...g.children.flatMap((c) => [c, ...c.children])])
       .map((t) => taskSpan(t, entryRanges.get(t.id)))
       .filter((s): s is NonNullable<typeof s> => s !== null);
     return computeGanttRange(spans, today, ganttStartOffsetDays);
@@ -77,7 +101,12 @@ export function GanttChart({ filterGroupId }: GanttChartProps) {
 
   const submitTicket = () => {
     const title = newTicketTitle.trim();
-    if (title !== "") void addTask(title, null, null, filterGroupId);
+    if (title !== "") {
+      const soleGroupId =
+        filterGroupIds.size === 1 ? [...filterGroupIds][0] : undefined;
+      const groupId = soleGroupId !== undefined && soleGroupId !== "__none__" ? soleGroupId : null;
+      void addTask(title, null, null, groupId);
+    }
     setNewTicketTitle("");
     setAddingTicket(false);
   };
@@ -174,21 +203,16 @@ export function GanttChart({ filterGroupId }: GanttChartProps) {
               })}
             </div>
           </div>
-          {groups.length === 0 && (
-            <div className="gantt-row">
-              <div className="gantt-left gantt-empty-left" style={leftStyle}>
-                <span className="gantt-empty-text">チケットがありません</span>
-              </div>
-              <GanttRowTimeline width={timelineWidth} todayPos={todayPos} />
-            </div>
-          )}
           {groups.map((group) => {
             const expanded = !collapsedIds.has(group.ticket.id);
+            const rollupEstimate = rollupEstimateMinutes(group);
+            const rollupActual = rollupActualMinutes(group, actualMinutes);
             return (
               <div key={group.ticket.id}>
                 <GanttRow
                   task={group.ticket}
                   isTicket
+                  depth={0}
                   hasChildren={group.children.length > 0}
                   expanded={expanded}
                   onToggle={() => toggleExpand(group.ticket.id)}
@@ -198,6 +222,7 @@ export function GanttChart({ filterGroupId }: GanttChartProps) {
                   todayPos={todayPos}
                   color={colorOf(group.ticket)}
                   entryRange={entryRanges.get(group.ticket.id)}
+                  fillRatio={actualFillRatio(rollupActual, rollupEstimate)}
                   onUpdate={updateTask}
                   onAddChild={() => {
                     const name = window.prompt("タスク名を入力してください");
@@ -213,23 +238,62 @@ export function GanttChart({ filterGroupId }: GanttChartProps) {
                   onDelete={() => confirmDeleteTicket(group.ticket, group.children.length > 0)}
                 />
                 {expanded &&
-                  group.children.map((child) => (
-                    <GanttRow
-                      key={child.id}
-                      task={child}
-                      isTicket={false}
-                      hasChildren={false}
-                      expanded={false}
-                      range={range}
-                      timelineWidth={timelineWidth}
-                      leftWidth={paneWidth}
-                      todayPos={todayPos}
-                      color={colorOf(child)}
-                      entryRange={entryRanges.get(child.id)}
-                      onUpdate={updateTask}
-                      onDelete={() => confirmDeleteChild(child)}
-                    />
-                  ))}
+                  group.children.map((child) => {
+                    const childExpanded = !collapsedIds.has(child.id);
+                    return (
+                      <div key={child.id}>
+                        <GanttRow
+                          task={child}
+                          isTicket={false}
+                          depth={1}
+                          hasChildren={child.children.length > 0}
+                          expanded={childExpanded}
+                          onToggle={() => toggleExpand(child.id)}
+                          range={range}
+                          timelineWidth={timelineWidth}
+                          leftWidth={paneWidth}
+                          todayPos={todayPos}
+                          color={colorOf(child)}
+                          entryRange={entryRanges.get(child.id)}
+                          fillRatio={actualFillRatio(
+                            actualMinutes.get(child.id) ?? 0,
+                            child.estimateMinutes,
+                          )}
+                          onUpdate={updateTask}
+                          onAddChild={() => {
+                            const name = window.prompt("タスク名を入力してください");
+                            if (name !== null && name.trim() !== "") {
+                              void addTask(name.trim(), child.categoryId, child.id, child.groupId);
+                            }
+                          }}
+                          onDelete={() => confirmDeleteChild(child)}
+                        />
+                        {childExpanded &&
+                          child.children.map((grandchild) => (
+                            <GanttRow
+                              key={grandchild.id}
+                              task={grandchild}
+                              isTicket={false}
+                              depth={2}
+                              hasChildren={false}
+                              expanded={false}
+                              range={range}
+                              timelineWidth={timelineWidth}
+                              leftWidth={paneWidth}
+                              todayPos={todayPos}
+                              color={colorOf(grandchild)}
+                              entryRange={entryRanges.get(grandchild.id)}
+                              fillRatio={actualFillRatio(
+                                actualMinutes.get(grandchild.id) ?? 0,
+                                grandchild.estimateMinutes,
+                              )}
+                              onUpdate={updateTask}
+                              onDelete={() => confirmDeleteChild(grandchild)}
+                            />
+                          ))}
+                      </div>
+                    );
+                  })}
               </div>
             );
           })}
@@ -245,7 +309,7 @@ export function GanttChart({ filterGroupId }: GanttChartProps) {
                   value={newTicketTitle}
                   onChange={(e) => setNewTicketTitle(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") submitTicket();
+                    if (e.key === "Enter" && !e.nativeEvent.isComposing) submitTicket();
                     if (e.key === "Escape") {
                       setNewTicketTitle("");
                       setAddingTicket(false);
@@ -288,6 +352,8 @@ function GanttRowTimeline({ width, todayPos }: { width: number; todayPos: number
 interface GanttRowProps {
   task: Task;
   isTicket: boolean;
+  /** チケットからの深さ（0=チケット, 1=子タスク, 2=孫タスク）。インデント量に使う */
+  depth: number;
   hasChildren: boolean;
   expanded: boolean;
   onToggle?: () => void;
@@ -297,6 +363,8 @@ interface GanttRowProps {
   todayPos: number | null;
   color: string;
   entryRange: { from: string; to: string } | undefined;
+  /** 見積に対する実績の割合（0-1）。見積未設定なら null（バー内の実績表示なし） */
+  fillRatio: number | null;
   onUpdate: (task: Task) => Promise<void>;
   onAddChild?: () => void;
   onDelete: () => void;
@@ -311,6 +379,7 @@ interface DragState {
 function GanttRow({
   task,
   isTicket,
+  depth,
   hasChildren,
   expanded,
   onToggle,
@@ -320,6 +389,7 @@ function GanttRow({
   todayPos,
   color,
   entryRange,
+  fillRatio,
   onUpdate,
   onAddChild,
   onDelete,
@@ -366,7 +436,10 @@ function GanttRow({
   return (
     <div className={`gantt-row ${isTicket ? "ticket" : "child"}`}>
       <div className="gantt-left" style={{ width: leftWidth }}>
-        {isTicket ? (
+        {Array.from({ length: depth }).map((_, i) => (
+          <span key={i} className="child-indent" />
+        ))}
+        {onToggle !== undefined ? (
           <button
             type="button"
             className={`tree-caret-btn ${hasChildren ? "" : "hidden"}`}
@@ -390,7 +463,7 @@ function GanttRow({
         <span className="gantt-status-chip" style={{ background: status.bg, color: status.text }}>
           {status.label}
         </span>
-        {isTicket && onAddChild !== undefined && (
+        {onAddChild !== undefined && (
           <button
             type="button"
             className="ghost-icon-btn"
@@ -442,7 +515,14 @@ function GanttRow({
                 background: color,
               }}
               title={`${span.start} → ${span.end}${span.derived ? "（実績から導出）" : ""}`}
-            />
+            >
+              {fillRatio !== null && (
+                <span
+                  className="gantt-bar-fill"
+                  style={{ width: `${fillRatio * 100}%` }}
+                />
+              )}
+            </span>
           )
         )}
       </div>

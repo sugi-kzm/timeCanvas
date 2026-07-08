@@ -40,13 +40,23 @@ TeraTerm 等と同じく、**GitHub の Releases ページから `.msi` / `.exe`
 
 ## 利用者側のインストール手順（想定）
 
-1. GitHub の Releases ページを開く
-2. 最新版の `.msi`（または `.exe`）をダウンロード
-3. 実行してインストールウィザードに従う
+1. 初回のみ: GitHub の Releases ページを開き、最新版の `.msi`（または `.exe`）をダウンロードして
+   インストールウィザードに従う
+2. 2回目以降: アプリ内の設定（データタブ）にある「アップデートを確認」ボタンから、
+   ワンクリックで最新版に更新できる（`tauri-plugin-updater` 経由）
+
+## 自動アップデートの仕組み
+
+- `tauri-plugin-updater` を導入済み。`src-tauri/tauri.conf.json` の `plugins.updater.endpoints` が
+  `https://github.com/sugi-kzm/timeCanvas/releases/latest/download/latest.json` を参照する
+- `release.yml` のビルド時に `TAURI_SIGNING_PRIVATE_KEY`（GitHub Actions シークレット）を使って
+  更新パッケージに署名し、`latest.json` と署名ファイルを Release アセットとして自動生成する
+- 署名鍵は minisign 形式のキーペア。秘密鍵はローカル（`~/.tauri/timecanvas-updater.key`、
+  WSL 側）にバックアップ済み・GitHub Secrets にも登録済み。鍵を紛失すると新しい鍵での
+  署名に切り替える必要があり、その場合は `tauri.conf.json` の `pubkey` も併せて更新する
+- 公開鍵は `tauri.conf.json` に埋め込み済み（アプリ本体に同梱されるため機密情報ではない）
 
 ## 今後の検討事項
 
 - コード署名（Authenticode）証明書を用意すれば、SmartScreen の警告を減らせる。
   現状は署名なしのため、初回起動時に Windows Defender SmartScreen の警告が出ることがある
-- 自動アップデート機能（`tauri-plugin-updater`）を使う場合は署名鍵の管理が必要になる。
-  Phase 1 の要件（自動アップデートなし）に沿って、現時点では見送り

@@ -1,7 +1,7 @@
 import { useAppStore } from "../store/appStore";
 import { calendarLabel } from "../lib/dates";
 import type { CalendarMode } from "../types";
-import { IconChevronLeft, IconChevronRight, IconSearch } from "./icons";
+import { IconChevronLeft, IconChevronRight, IconSearch, IconSidebar } from "./icons";
 
 const MODES: { key: CalendarMode; label: string }[] = [
   { key: "day", label: "日" },
@@ -21,6 +21,8 @@ export function Toolbar() {
   const setSearchKeyword = useAppStore((s) => s.setSearchKeyword);
   const searchBoxOpen = useAppStore((s) => s.searchBoxOpen);
   const setSearchBoxOpen = useAppStore((s) => s.setSearchBoxOpen);
+  const sidebarManuallyHidden = useAppStore((s) => s.sidebarManuallyHidden);
+  const toggleSidebarManuallyHidden = useAppStore((s) => s.toggleSidebarManuallyHidden);
 
   const showSearchBox = searchBoxOpen || searchKeyword.trim() !== "";
 
@@ -32,6 +34,15 @@ export function Toolbar() {
   return (
     <header className="toolbar">
       <span className="app-title">TimeCanvas</span>
+      <button
+        type="button"
+        className="btn icon-btn"
+        aria-label={sidebarManuallyHidden ? "サイドバーを表示" : "サイドバーを隠す"}
+        title={sidebarManuallyHidden ? "サイドバーを表示" : "サイドバーを隠す"}
+        onClick={toggleSidebarManuallyHidden}
+      >
+        <IconSidebar size={16} />
+      </button>
       <button type="button" className="btn" onClick={() => void goToday()}>
         今日
       </button>

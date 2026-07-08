@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import { invoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../store/appStore";
 import { confirmDialog } from "../store/confirmStore";
@@ -9,12 +10,23 @@ import { entriesToCsv, entriesToJson } from "../lib/export";
 import { listAllEntries } from "../db/entryRepo";
 import { getSetting, setSetting, SETTING_KEYS } from "../db/settingsRepo";
 import { detectOneDriveDir, runBackup } from "../db/backupService";
+import { getNotesRoot, setNotesRoot } from "../db/notesService";
+import { deleteSampleData, seedSampleData } from "../db/devSeed";
 import { IconClose } from "./icons";
 
-type Tab = "categories" | "display" | "data";
+type Tab = "schedule" | "tickets" | "analytics" | "notes" | "history" | "data";
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "schedule", label: "スケジュール" },
+  { key: "tickets", label: "チケット" },
+  { key: "analytics", label: "分析" },
+  { key: "notes", label: "ノート" },
+  { key: "history", label: "履歴" },
+  { key: "data", label: "データ" },
+];
 
 export function SettingsDialog() {
-  const [tab, setTab] = useState<Tab>("categories");
+  const [tab, setTab] = useState<Tab>("schedule");
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
 
   return (
@@ -37,44 +49,95 @@ export function SettingsDialog() {
           </button>
         </div>
         <div className="tab-bar" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            className={`tab ${tab === "categories" ? "active" : ""}`}
-            onClick={() => setTab("categories")}
-          >
-            カテゴリ
-          </button>
-          <button
-            type="button"
-            role="tab"
-            className={`tab ${tab === "display" ? "active" : ""}`}
-            onClick={() => setTab("display")}
-          >
-            表示
-          </button>
-          <button
-            type="button"
-            role="tab"
-            className={`tab ${tab === "data" ? "active" : ""}`}
-            onClick={() => setTab("data")}
-          >
-            データ
-          </button>
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              className={`tab ${tab === t.key ? "active" : ""}`}
+              onClick={() => setTab(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
-        {tab === "categories" && <CategoriesTab />}
-        {tab === "display" && <DisplayTab />}
+        {tab === "schedule" && <ScheduleTab />}
+        {tab === "tickets" && <TicketsTab />}
+        {tab === "analytics" && <PlaceholderTab />}
+        {tab === "notes" && <NotesTab />}
+        {tab === "history" && <PlaceholderTab />}
         {tab === "data" && <DataTab />}
       </div>
     </div>
   );
 }
 
-function CategoriesTab() {
+function PlaceholderTab() {
+  return (
+    <div className="settings-body">
+      <p className="settings-hint">現在設定項目はありません。</p>
+    </div>
+  );
+}
+
+function ScheduleTab() {
+  const weekStartsOn = useAppStore((s) => s.weekStartsOn);
+  const setWeekStartsOn = useAppStore((s) => s.setWeekStartsOn);
+  const showWeekends = useAppStore((s) => s.showWeekends);
+  const setShowWeekends = useAppStore((s) => s.setShowWeekends);
+  const scheduleStartHour = useAppStore((s) => s.scheduleStartHour);
+  const setScheduleStartHour = useAppStore((s) => s.setScheduleStartHour);
+
+  return (
+    <div className="settings-body">
+      <h3 className="settings-heading">カレンダー</h3>
+      <div className="settings-row">
+        <span className="settings-value">週の開始曜日</span>
+        <select
+          className="select-input settings-week-start"
+          value={weekStartsOn}
+          onChange={(e) => void setWeekStartsOn(e.target.value === "1" ? 1 : 0)}
+        >
+          <option value={0}>日曜日</option>
+          <option value={1}>月曜日</option>
+        </select>
+      </div>
+      <p className="settings-hint">
+        週カレンダー・月カレンダー・ミニカレンダー・年間ヒートマップの並びに反映されます。
+      </p>
+      <div className="settings-row">
+        <label className="settings-value settings-checkbox-label">
+          <input
+            type="checkbox"
+            checked={showWeekends}
+            onChange={(e) => void setShowWeekends(e.target.checked)}
+          />
+          週表示に土日を含める
+        </label>
+      </div>
+      <div className="settings-row">
+        <span className="settings-value">スケジュールの初期表示位置</span>
+        <input
+          type="number"
+          className="text-input settings-gantt-offset"
+          min={0}
+          max={23}
+          value={scheduleStartHour}
+          onChange={(e) => void setScheduleStartHour(Number(e.target.value))}
+        />
+        <span className="settings-value-unit">時</span>
+      </div>
+    </div>
+  );
+}
+
+function TicketsTab() {
   const categories = useAppStore((s) => s.categories);
   const addCategory = useAppStore((s) => s.addCategory);
   const updateCategory = useAppStore((s) => s.updateCategory);
   const archiveCategory = useAppStore((s) => s.archiveCategory);
+  const ganttStartOffsetDays = useAppStore((s) => s.ganttStartOffsetDays);
+  const setGanttStartOffsetDays = useAppStore((s) => s.setGanttStartOffsetDays);
 
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState<string>(CATEGORY_PALETTE[0]);
@@ -88,6 +151,7 @@ function CategoriesTab() {
 
   return (
     <div className="settings-body">
+      <h3 className="settings-heading">カテゴリ</h3>
       <ul className="settings-category-list">
         {categories.map((c) => (
           <li key={c.id} className="settings-category-row">
@@ -138,40 +202,13 @@ function CategoriesTab() {
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") submitNew();
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) submitNew();
           }}
         />
         <button type="button" className="btn primary" onClick={submitNew}>
           追加
         </button>
       </div>
-    </div>
-  );
-}
-
-function DisplayTab() {
-  const weekStartsOn = useAppStore((s) => s.weekStartsOn);
-  const setWeekStartsOn = useAppStore((s) => s.setWeekStartsOn);
-  const ganttStartOffsetDays = useAppStore((s) => s.ganttStartOffsetDays);
-  const setGanttStartOffsetDays = useAppStore((s) => s.setGanttStartOffsetDays);
-
-  return (
-    <div className="settings-body">
-      <h3 className="settings-heading">カレンダー</h3>
-      <div className="settings-row">
-        <span className="settings-value">週の開始曜日</span>
-        <select
-          className="select-input settings-week-start"
-          value={weekStartsOn}
-          onChange={(e) => void setWeekStartsOn(e.target.value === "1" ? 1 : 0)}
-        >
-          <option value={0}>日曜日</option>
-          <option value={1}>月曜日</option>
-        </select>
-      </div>
-      <p className="settings-hint">
-        週カレンダー・月カレンダー・ミニカレンダー・年間ヒートマップの並びに反映されます。
-      </p>
       <h3 className="settings-heading">ガントチャート</h3>
       <div className="settings-row">
         <span className="settings-value">開始位置：今日の</span>
@@ -189,13 +226,51 @@ function DisplayTab() {
   );
 }
 
+function NotesTab() {
+  const setStatus = useAppStore((s) => s.setStatus);
+  const [notesDir, setNotesDir] = useState<string | null>(null);
+
+  useEffect(() => {
+    void getNotesRoot().then(setNotesDir);
+  }, []);
+
+  const chooseDir = async () => {
+    const dir = await open({ directory: true, title: "ノートの保存先フォルダを選択" });
+    if (typeof dir !== "string") return;
+    await setNotesRoot(dir);
+    setNotesDir(dir);
+    setStatus(`ノートの保存先を変更しました: ${dir}`);
+  };
+
+  return (
+    <div className="settings-body">
+      <h3 className="settings-heading">保存先フォルダ</h3>
+      <div className="settings-row">
+        <span className="settings-value">{notesDir ?? "読み込み中…"}</span>
+        <button type="button" className="btn" onClick={() => void chooseDir()}>
+          フォルダを選択
+        </button>
+      </div>
+      <p className="settings-hint">
+        変更するとアプリの再起動なしで、次回ノート画面を開いたときに新しい保存先が使われます。
+      </p>
+    </div>
+  );
+}
+
 function DataTab() {
   const setStatus = useAppStore((s) => s.setStatus);
   const categories = useAppStore((s) => s.categories);
+  const reloadEntries = useAppStore((s) => s.reloadEntries);
+  const loadTasks = useAppStore((s) => s.loadTasks);
   const [backupDir, setBackupDir] = useState<string | null>(null);
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
   const [oneDrive, setOneDrive] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [seedingBusy, setSeedingBusy] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -284,8 +359,122 @@ function DataTab() {
     }
   };
 
+  const checkForUpdate = async () => {
+    setCheckingUpdate(true);
+    setStatus("確認中...");
+    try {
+      const update = await check();
+      if (update === null) {
+        setAvailableUpdate(null);
+        setStatus("最新版です");
+      } else {
+        setAvailableUpdate(update);
+        setStatus(`新しいバージョンがあります: ${update.version}`);
+      }
+    } catch (e) {
+      setAvailableUpdate(null);
+      setStatus(`アップデートの確認に失敗しました: ${String(e)}`);
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+
+  const installUpdate = async () => {
+    if (availableUpdate === null) return;
+    setInstallingUpdate(true);
+    setStatus("ダウンロード中...");
+    try {
+      let lastPercent = -1;
+      let totalLength = 0;
+      let downloaded = 0;
+      await availableUpdate.downloadAndInstall((event) => {
+        if (event.event === "Started") {
+          totalLength = event.data.contentLength ?? 0;
+        } else if (event.event === "Progress") {
+          downloaded += event.data.chunkLength;
+          if (totalLength > 0) {
+            const percent = Math.floor((downloaded / totalLength) * 100);
+            if (percent !== lastPercent) {
+              lastPercent = percent;
+              setStatus(`ダウンロード中... ${percent}%`);
+            }
+          }
+        } else if (event.event === "Finished") {
+          setStatus("インストール中...");
+        }
+      });
+      setStatus("更新が完了しました。再起動します...");
+      await relaunch();
+    } catch (e) {
+      setStatus(`アップデートに失敗しました: ${String(e)}`);
+    } finally {
+      setInstallingUpdate(false);
+    }
+  };
+
+  const seedSample = async () => {
+    setSeedingBusy(true);
+    try {
+      await seedSampleData();
+      await Promise.all([reloadEntries(), loadTasks()]);
+      setStatus("サンプルデータを投入しました");
+    } catch (e) {
+      setStatus(`サンプルデータの投入に失敗しました: ${String(e)}`);
+    } finally {
+      setSeedingBusy(false);
+    }
+  };
+
+  const deleteSample = async () => {
+    const ok = await confirmDialog({
+      title: "サンプルデータを削除",
+      message: "「[sample]」で始まるチケット・記録をすべて削除します。よろしいですか？",
+      danger: true,
+    });
+    if (!ok) return;
+    setSeedingBusy(true);
+    try {
+      await deleteSampleData();
+      await Promise.all([reloadEntries(), loadTasks()]);
+      setStatus("サンプルデータを削除しました");
+    } catch (e) {
+      setStatus(`サンプルデータの削除に失敗しました: ${String(e)}`);
+    } finally {
+      setSeedingBusy(false);
+    }
+  };
+
   return (
     <div className="settings-body">
+      <h3 className="settings-heading">アップデート</h3>
+      <div className="settings-row">
+        <span className="settings-value">
+          {availableUpdate !== null
+            ? `新しいバージョン ${availableUpdate.version} が利用可能です`
+            : "現在のバージョンを確認します"}
+        </span>
+        <button
+          type="button"
+          className="btn"
+          disabled={checkingUpdate || installingUpdate}
+          onClick={() => void checkForUpdate()}
+        >
+          アップデートを確認
+        </button>
+        {availableUpdate !== null && (
+          <button
+            type="button"
+            className="btn primary"
+            disabled={installingUpdate}
+            onClick={() => void installUpdate()}
+          >
+            今すぐ更新
+          </button>
+        )}
+      </div>
+      {availableUpdate?.body != null && availableUpdate.body !== "" && (
+        <p className="settings-hint">{availableUpdate.body}</p>
+      )}
       <h3 className="settings-heading">バックアップ</h3>
       <p className="settings-desc">
         アプリ終了時と 1 日 1 回、指定フォルダへ自動バックアップします（直近 30 世代を保持）。
@@ -332,6 +521,27 @@ function DataTab() {
           CSV でエクスポート
         </button>
       </div>
+      {import.meta.env.DEV && (
+        <>
+          <h3 className="settings-heading">開発用サンプルデータ</h3>
+          <p className="settings-hint">
+            開発ビルドのみに表示されます。チケット・記録のサンプルを投入し、履歴・ガント・カンバン・分析の表示確認に使えます。
+          </p>
+          <div className="settings-row">
+            <button type="button" className="btn" disabled={seedingBusy} onClick={() => void seedSample()}>
+              サンプルデータを投入
+            </button>
+            <button
+              type="button"
+              className="btn danger"
+              disabled={seedingBusy}
+              onClick={() => void deleteSample()}
+            >
+              サンプルデータを削除
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

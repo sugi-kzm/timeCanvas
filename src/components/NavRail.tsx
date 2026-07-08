@@ -1,12 +1,20 @@
 import { useAppStore } from "../store/appStore";
 import type { ViewKind } from "../types";
-import { IconCalendar, IconChart, IconGear, IconNotebook, IconTasks } from "./icons";
+import {
+  IconCalendar,
+  IconChart,
+  IconGear,
+  IconHistory,
+  IconNotebook,
+  IconTasks,
+} from "./icons";
 
 const VIEWS: { key: ViewKind; label: string; icon: React.ReactNode }[] = [
   { key: "calendar", label: "カレンダー", icon: <IconCalendar /> },
   { key: "tasks", label: "タスク", icon: <IconTasks /> },
   { key: "analytics", label: "分析", icon: <IconChart /> },
   { key: "notes", label: "ノート", icon: <IconNotebook /> },
+  { key: "history", label: "履歴", icon: <IconHistory /> },
 ];
 
 export function NavRail() {

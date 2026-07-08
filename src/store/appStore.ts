@@ -9,6 +9,7 @@ import type {
   TimeEntry,
   ViewKind,
 } from "../types";
+import type { TicketSortMode } from "../lib/tickets";
 import {
   calendarRange,
   fromLocalIso,
@@ -43,7 +44,7 @@ export type EditorState =
     }
   | { mode: "edit"; entry: TimeEntry };
 
-export type TasksViewMode = "tickets" | "board" | "gantt" | "history";
+export type TasksViewMode = "tickets" | "board" | "gantt";
 
 interface AppState {
   view: ViewKind;
@@ -67,7 +68,15 @@ interface AppState {
   ganttStartOffsetDays: number;
   /** ガント左ペイン（チケット一覧）の最小幅(px)。設定から変更できる */
   ganttMinLeftPaneWidth: number;
+  /** 週末（土日）をカレンダーに表示するか。設定から変更できる */
+  showWeekends: boolean;
+  /** スケジュール表示の開始時刻（0-23時）。設定から変更できる */
+  scheduleStartHour: number;
+  /** チケット一覧の並び順モード（期限順 / 手動）。設定から変更できる */
+  ticketSortMode: TicketSortMode;
   hiddenCategoryIds: readonly string[];
+  /** サイドバーを手動で隠しているか（幅不足による自動非表示とは独立） */
+  sidebarManuallyHidden: boolean;
   selectedEntryId: string | null;
   quickCreate: QuickCreateState | null;
   editor: EditorState | null;
@@ -103,6 +112,7 @@ interface AppState {
     categoryId: string | null,
     parentId?: string | null,
     groupId?: string | null,
+    overrides?: taskRepo.CreateTaskOverrides,
   ) => Promise<Task | null>;
   updateTask: (task: Task) => Promise<void>;
   toggleTaskDone: (task: Task) => Promise<void>;
@@ -117,6 +127,12 @@ interface AppState {
   setWeekStartsOn: (value: WeekStartsOn) => Promise<void>;
   setGanttStartOffsetDays: (days: number) => Promise<void>;
   setGanttMinLeftPaneWidth: (px: number) => Promise<void>;
+  setShowWeekends: (value: boolean) => Promise<void>;
+  setScheduleStartHour: (hour: number) => Promise<void>;
+  setTicketSortMode: (mode: TicketSortMode) => Promise<void>;
+  reorderTickets: (idsInOrder: readonly string[]) => Promise<void>;
+
+  toggleSidebarManuallyHidden: () => void;
 
   setSearchKeyword: (keyword: string) => void;
   setSearchBoxOpen: (open: boolean) => void;
@@ -150,7 +166,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   weekStartsOn: 0,
   ganttStartOffsetDays: 3,
   ganttMinLeftPaneWidth: 120,
+  showWeekends: true,
+  scheduleStartHour: 9,
+  ticketSortMode: "due",
   hiddenCategoryIds: [],
+  sidebarManuallyHidden: false,
   selectedEntryId: null,
   quickCreate: null,
   editor: null,
@@ -174,8 +194,27 @@ export const useAppStore = create<AppState>((set, get) => ({
         Number.isFinite(minWidthRaw) && minWidthRaw >= 60 && minWidthRaw <= 600
           ? minWidthRaw
           : 120;
+      const showWeekendsSetting = await getSetting(SETTING_KEYS.showWeekends);
+      const showWeekends = showWeekendsSetting === null ? true : showWeekendsSetting === "1";
+      const scheduleStartHourSetting = await getSetting(SETTING_KEYS.scheduleStartHour);
+      const scheduleStartHourRaw =
+        scheduleStartHourSetting === null ? NaN : Number(scheduleStartHourSetting);
+      const scheduleStartHour =
+        Number.isFinite(scheduleStartHourRaw) && scheduleStartHourRaw >= 0 && scheduleStartHourRaw <= 23
+          ? scheduleStartHourRaw
+          : 9;
+      const ticketSortModeSetting = await getSetting(SETTING_KEYS.ticketSortMode);
+      const ticketSortMode: TicketSortMode = ticketSortModeSetting === "manual" ? "manual" : "due";
       await ticketGroupRepo.ensureDefaultTicketGroups();
-      set({ categories, weekStartsOn, ganttStartOffsetDays, ganttMinLeftPaneWidth });
+      set({
+        categories,
+        weekStartsOn,
+        ganttStartOffsetDays,
+        ganttMinLeftPaneWidth,
+        showWeekends,
+        scheduleStartHour,
+        ticketSortMode,
+      });
       await Promise.all([get().reloadEntries(), get().loadTasks(), get().loadTicketGroups()]);
     } catch (e) {
       set({ statusMessage: `初期化に失敗しました: ${String(e)}` });
@@ -305,9 +344,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  addTask: async (title, categoryId, parentId = null, groupId = null) => {
+  addTask: async (title, categoryId, parentId = null, groupId = null, overrides = {}) => {
     try {
-      const created = await taskRepo.createTask(title, categoryId, parentId, groupId);
+      const created = await taskRepo.createTask(title, categoryId, parentId, groupId, overrides);
       set((s) => ({ tasks: [...s.tasks, created] }));
       return created;
     } catch (e) {
@@ -423,6 +462,52 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     await get().reloadEntries();
   },
+
+  setShowWeekends: async (value) => {
+    set({ showWeekends: value });
+    try {
+      await setSetting(SETTING_KEYS.showWeekends, value ? "1" : "0");
+    } catch (e) {
+      set({ statusMessage: `設定の保存に失敗しました: ${String(e)}` });
+    }
+  },
+
+  setScheduleStartHour: async (hour) => {
+    const clamped = Math.max(0, Math.min(23, Math.round(hour)));
+    set({ scheduleStartHour: clamped });
+    try {
+      await setSetting(SETTING_KEYS.scheduleStartHour, String(clamped));
+    } catch (e) {
+      set({ statusMessage: `設定の保存に失敗しました: ${String(e)}` });
+    }
+  },
+
+  setTicketSortMode: async (mode) => {
+    set({ ticketSortMode: mode });
+    try {
+      await setSetting(SETTING_KEYS.ticketSortMode, mode);
+    } catch (e) {
+      set({ statusMessage: `設定の保存に失敗しました: ${String(e)}` });
+    }
+  },
+
+  reorderTickets: async (idsInOrder) => {
+    if (get().ticketSortMode !== "manual") await get().setTicketSortMode("manual");
+    const orderIndex = new Map(idsInOrder.map((id, index) => [id, index]));
+    set((s) => ({
+      tasks: s.tasks.map((t) =>
+        orderIndex.has(t.id) ? { ...t, sortOrder: orderIndex.get(t.id) ?? t.sortOrder } : t,
+      ),
+    }));
+    try {
+      await taskRepo.updateSortOrders(idsInOrder);
+    } catch (e) {
+      set({ statusMessage: `並び替えの保存に失敗しました: ${String(e)}` });
+    }
+  },
+
+  toggleSidebarManuallyHidden: () =>
+    set((s) => ({ sidebarManuallyHidden: !s.sidebarManuallyHidden })),
 
   setSearchKeyword: (keyword) => set({ searchKeyword: keyword }),
   setSearchBoxOpen: (open) => set({ searchBoxOpen: open }),

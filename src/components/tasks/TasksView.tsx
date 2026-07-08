@@ -5,27 +5,25 @@ import type { TasksViewMode } from "../../store/appStore";
 import { TicketsTab } from "./TicketsTab";
 import { KanbanBoard } from "./KanbanBoard";
 import { GanttChart } from "./GanttChart";
-import { HistoryTab } from "./HistoryTab";
 import { IconChevronLeft, IconChevronRight } from "../icons";
 
 const VIEW_TABS: { key: TasksViewMode; label: string }[] = [
   { key: "tickets", label: "チケット" },
   { key: "board", label: "カンバン" },
   { key: "gantt", label: "ガント" },
-  { key: "history", label: "履歴" },
 ];
 
 export function TasksView() {
   const viewMode = useAppStore((s) => s.tasksViewMode);
   const setViewMode = useAppStore((s) => s.setTasksViewMode);
-  const [filterGroupId, setFilterGroupId] = useState<string | null>(null);
+  const [filterGroupIds, setFilterGroupIds] = useState<ReadonlySet<string>>(new Set());
   const [railOpen, setRailOpen] = useState(true);
 
   return (
     <div className="tasks-view wide">
       <div className="tasks-inner">
         {/* どの表示モードでも変わらない共通ヘッダー */}
-        <div className="tasks-header-row">
+        <div className="tasks-header-row compact">
           <button
             type="button"
             className="ghost-icon-btn"
@@ -36,7 +34,9 @@ export function TasksView() {
             {railOpen ? <IconChevronLeft size={16} /> : <IconChevronRight size={16} />}
           </button>
           <h2 className="tasks-heading">チケット</h2>
-          <div className="view-switch" role="group" aria-label="チケットの表示切替">
+        </div>
+        <div className="tasks-tabs-row">
+          <div className="view-switch underline-tabs" role="group" aria-label="チケットの表示切替">
             {VIEW_TABS.map((tab) => (
               <button
                 key={tab.key}
@@ -52,15 +52,14 @@ export function TasksView() {
         <div className="tickets-layout">
           {railOpen && (
             <TicketGroupRail
-              filterGroupId={filterGroupId}
-              onSelect={setFilterGroupId}
+              filterGroupIds={filterGroupIds}
+              onChange={setFilterGroupIds}
             />
           )}
           <div className="tickets-main">
-            {viewMode === "tickets" && <TicketsTab filterGroupId={filterGroupId} />}
-            {viewMode === "board" && <KanbanBoard filterGroupId={filterGroupId} />}
-            {viewMode === "gantt" && <GanttChart filterGroupId={filterGroupId} />}
-            {viewMode === "history" && <HistoryTab filterGroupId={filterGroupId} />}
+            {viewMode === "tickets" && <TicketsTab filterGroupIds={filterGroupIds} />}
+            {viewMode === "board" && <KanbanBoard filterGroupIds={filterGroupIds} />}
+            {viewMode === "gantt" && <GanttChart filterGroupIds={filterGroupIds} />}
           </div>
         </div>
       </div>
@@ -69,12 +68,12 @@ export function TasksView() {
 }
 
 interface TicketGroupRailProps {
-  filterGroupId: string | null;
-  onSelect: (id: string | null) => void;
+  filterGroupIds: ReadonlySet<string>;
+  onChange: (ids: ReadonlySet<string>) => void;
 }
 
 /** チケットの分類レール（スケジュールのカテゴリとは別軸。自学習・プロジェクト等） */
-function TicketGroupRail({ filterGroupId, onSelect }: TicketGroupRailProps) {
+function TicketGroupRail({ filterGroupIds, onChange }: TicketGroupRailProps) {
   const ticketGroups = useAppStore((s) => s.ticketGroups);
   const addTicketGroup = useAppStore((s) => s.addTicketGroup);
   const renameTicketGroup = useAppStore((s) => s.renameTicketGroup);
@@ -86,12 +85,17 @@ function TicketGroupRail({ filterGroupId, onSelect }: TicketGroupRailProps) {
   const [editingName, setEditingName] = useState("");
   const addInputRef = useRef<HTMLInputElement>(null);
 
+  const toggleGroup = (id: string) => {
+    const next = new Set(filterGroupIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange(next);
+  };
+
   const submitNew = () => {
     const name = newName.trim();
     if (name !== "") {
-      void addTicketGroup(name).then((created) => {
-        if (created !== null) onSelect(created.id);
-      });
+      void addTicketGroup(name);
     }
     setNewName("");
     setAdding(false);
@@ -117,20 +121,26 @@ function TicketGroupRail({ filterGroupId, onSelect }: TicketGroupRailProps) {
     }).then((ok) => {
       if (ok) {
         void removeTicketGroup(id);
-        if (filterGroupId === id) onSelect(null);
+        if (filterGroupIds.has(id)) {
+          const next = new Set(filterGroupIds);
+          next.delete(id);
+          onChange(next);
+        }
       }
     });
   };
 
   return (
     <aside className="tickets-side" aria-label="チケットの分類">
-      <button
-        type="button"
-        className={`tickets-side-item ${filterGroupId === null ? "active" : ""}`}
-        onClick={() => onSelect(null)}
-      >
-        すべて
-      </button>
+      <div className="tickets-side-row">
+        <button
+          type="button"
+          className={`tickets-side-item tickets-side-item-all ${filterGroupIds.size === 0 ? "active" : ""}`}
+          onClick={() => onChange(new Set())}
+        >
+          すべて
+        </button>
+      </div>
       {ticketGroups.map((g) =>
         editingId === g.id ? (
           <input
@@ -141,22 +151,25 @@ function TicketGroupRail({ filterGroupId, onSelect }: TicketGroupRailProps) {
             value={editingName}
             onChange={(e) => setEditingName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") submitEdit();
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) submitEdit();
               if (e.key === "Escape") setEditingId(null);
             }}
             onBlur={submitEdit}
           />
         ) : (
           <div key={g.id} className="tickets-side-row">
-            <button
-              type="button"
-              className={`tickets-side-item ${filterGroupId === g.id ? "active" : ""}`}
-              onClick={() => onSelect(g.id)}
+            <label
+              className="tickets-side-item tickets-side-checkbox"
               onDoubleClick={() => startEdit(g.id, g.name)}
               title="ダブルクリックで名前を変更"
             >
+              <input
+                type="checkbox"
+                checked={filterGroupIds.has(g.id)}
+                onChange={() => toggleGroup(g.id)}
+              />
               {g.name}
-            </button>
+            </label>
             <button
               type="button"
               className="tickets-side-del"
@@ -179,7 +192,7 @@ function TicketGroupRail({ filterGroupId, onSelect }: TicketGroupRailProps) {
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") submitNew();
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) submitNew();
             if (e.key === "Escape") {
               setNewName("");
               setAdding(false);

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  actualFillRatio,
   computeGanttRange,
   dayCells,
   dayDiff,
@@ -14,6 +15,7 @@ import type { Task } from "../types";
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {
     id: "t1",
+    displayNo: 1,
     title: "task",
     memo: "",
     categoryId: null,
@@ -116,5 +118,27 @@ describe("monthSegments / spanToBar / todayOffset", () => {
     const offset = todayOffset(range, today);
     expect(offset).not.toBeNull();
     expect(offset).toBe(dayDiff(range.from, today));
+  });
+});
+
+describe("actualFillRatio", () => {
+  it("見積が未設定なら null", () => {
+    expect(actualFillRatio(60, null)).toBeNull();
+  });
+
+  it("見積が0以下なら null", () => {
+    expect(actualFillRatio(60, 0)).toBeNull();
+  });
+
+  it("実績/見積の割合を返す", () => {
+    expect(actualFillRatio(30, 60)).toBe(0.5);
+  });
+
+  it("実績が見積を超えても1でクリップする", () => {
+    expect(actualFillRatio(120, 60)).toBe(1);
+  });
+
+  it("実績0なら0", () => {
+    expect(actualFillRatio(0, 60)).toBe(0);
   });
 });

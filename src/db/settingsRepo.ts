@@ -7,6 +7,9 @@ export const SETTING_KEYS = {
   weekStartsOn: "week_starts_on",
   ganttStartOffsetDays: "gantt_start_offset_days",
   ganttMinLeftPaneWidth: "gantt_min_left_pane_width",
+  showWeekends: "show_weekends",
+  scheduleStartHour: "schedule_start_hour",
+  ticketSortMode: "ticket_sort_mode",
 } as const;
 
 export async function getSetting(key: string): Promise<string | null> {

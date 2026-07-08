@@ -50,6 +50,8 @@ export interface TicketGroup {
  */
 export interface Task {
   id: string;
+  /** 人間向けの連番表示（"#1" 等）。作成順に採番される */
+  displayNo: number;
   title: string;
   memo: string;
   categoryId: string | null;
@@ -70,6 +72,6 @@ export interface Task {
   completedAt: string | null;
 }
 
-export type ViewKind = "calendar" | "tasks" | "analytics" | "notes";
+export type ViewKind = "calendar" | "tasks" | "analytics" | "notes" | "history";
 
 export type CalendarMode = "day" | "week" | "month";

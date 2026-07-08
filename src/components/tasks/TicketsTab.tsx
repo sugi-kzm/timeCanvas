@@ -1,40 +1,65 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "../../store/appStore";
 import { confirmDialog } from "../../store/confirmStore";
-import type { Task } from "../../types";
+import { listEntriesForTaskIds } from "../../db/entryRepo";
+import type { Category, Task, TimeEntry } from "../../types";
 import { TASK_STATUSES, statusConfig } from "../../lib/status";
-import { formatHours } from "../../lib/dates";
+import { DOW_LABELS, durationMinutes, formatHm, formatHours, fromLocalIso } from "../../lib/dates";
 import {
-  childProgress,
   groupTickets,
   rollupActualMinutes,
   rollupEstimateMinutes,
+  taskDepth,
+  totalEstimateMinutes,
+  type TicketChild,
   type TicketGroup as TicketBundle,
 } from "../../lib/tickets";
 import { IconChevronRight } from "../icons";
+import { TicketRow } from "./TicketRow";
+import { CreateTicketDialog } from "./CreateTicketDialog";
 
 interface TicketsTabProps {
-  /** null = すべて表示。分類 ID で絞り込み */
-  filterGroupId: string | null;
+  /** 空集合 = すべて表示。分類 ID（"__none__" はなし）の集合で絞り込み */
+  filterGroupIds: ReadonlySet<string>;
 }
 
 /**
  * チケット/タスクを包括的に管理するタブ（Jira/Atlassian 風のマスタ・ディテール構成）。
  * 左に親子階層のリスト、右に選択項目の詳細編集パネル。
  */
-export function TicketsTab({ filterGroupId }: TicketsTabProps) {
+export function TicketsTab({ filterGroupIds }: TicketsTabProps) {
   const tasks = useAppStore((s) => s.tasks);
-  const addTask = useAppStore((s) => s.addTask);
+  const categories = useAppStore((s) => s.categories);
+  const ticketSortMode = useAppStore((s) => s.ticketSortMode);
+  const setTicketSortMode = useAppStore((s) => s.setTicketSortMode);
+  const reorderTickets = useAppStore((s) => s.reorderTickets);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expandedCollapsed, setExpandedCollapsed] = useState<ReadonlySet<string>>(new Set());
-  const [newTicketTitle, setNewTicketTitle] = useState("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [dragOverTicketId, setDragOverTicketId] = useState<string | null>(null);
 
   const groups = useMemo(() => {
-    const all = groupTickets(tasks);
-    if (filterGroupId === null) return all;
-    return all.filter((g) => g.ticket.groupId === filterGroupId);
-  }, [tasks, filterGroupId]);
+    const all = groupTickets(tasks, ticketSortMode);
+    return all.filter((g) => filterGroupIds.size === 0 || filterGroupIds.has(g.ticket.groupId ?? "__none__"));
+  }, [tasks, filterGroupIds, ticketSortMode]);
+
+  const handleTicketDrop = (targetId: string, e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverTicketId(null);
+    const draggedId = e.dataTransfer.getData("text/plain");
+    if (draggedId === "" || draggedId === targetId) return;
+    const ids = groups.map((g) => g.ticket.id);
+    const fromIdx = ids.indexOf(draggedId);
+    const toIdx = ids.indexOf(targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const reordered = [...ids];
+    reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, draggedId);
+    void reorderTickets(reordered);
+  };
+
+  const tasksById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 
   const selectedTask = useMemo(
     () => tasks.find((t) => t.id === selectedId) ?? null,
@@ -60,55 +85,88 @@ export function TicketsTab({ filterGroupId }: TicketsTabProps) {
       return next;
     });
 
-  const submitTicket = () => {
-    const title = newTicketTitle.trim();
-    if (title === "") return;
-    void addTask(title, null, null, filterGroupId).then((created) => {
-      if (created !== null) setSelectedId(created.id);
-    });
-    setNewTicketTitle("");
-  };
+  const soleGroupId = filterGroupIds.size === 1 ? [...filterGroupIds][0] : undefined;
+  const initialGroupId =
+    soleGroupId !== undefined && soleGroupId !== "__none__" ? soleGroupId : null;
+
+  const totalEstimate = useMemo(() => totalEstimateMinutes(groups), [groups]);
 
   return (
     <div className="tickets-tab">
       <div className="tickets-tab-master">
         <div className="task-add-row">
-          <input
-            type="text"
-            className="text-input"
-            placeholder="新しいチケットを追加（Enter で登録）"
-            value={newTicketTitle}
-            onChange={(e) => setNewTicketTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submitTicket();
-            }}
-          />
-          <button type="button" className="btn primary" onClick={submitTicket}>
-            追加
+          <button type="button" className="btn primary" onClick={() => setCreateDialogOpen(true)}>
+            + 新規チケット
           </button>
+          <div className="view-switch ticket-sort-switch" role="group" aria-label="並び順切替">
+            <button
+              type="button"
+              className={`seg ${ticketSortMode === "due" ? "active" : ""}`}
+              onClick={() => void setTicketSortMode("due")}
+            >
+              期限順
+            </button>
+            <button
+              type="button"
+              className={`seg ${ticketSortMode === "manual" ? "active" : ""}`}
+              onClick={() => void setTicketSortMode("manual")}
+            >
+              手動
+            </button>
+          </div>
+          <span className="tickets-tab-totals">
+            {groups.length}件 / 見積合計 {formatHours(totalEstimate)}h
+          </span>
         </div>
         {groups.length === 0 && (
-          <p className="tasks-empty">チケットがありません。上の入力欄から追加してください。</p>
+          <p className="tasks-empty">チケットがありません。上のボタンから追加してください。</p>
+        )}
+        {groups.length > 0 && (
+          <div className="ticket-list-header">
+            <span>状態</span>
+            <span>チケット名</span>
+            <span>子タスク</span>
+            <span>カテゴリ</span>
+            <span>見積</span>
+            <span>実績</span>
+          </div>
         )}
         <ul className="task-list">
           {groups.map((group) => (
             <TicketMasterRow
               key={group.ticket.id}
               group={group}
+              categories={categories}
               expanded={!expandedCollapsed.has(group.ticket.id)}
               onToggle={() => toggleExpand(group.ticket.id)}
               selectedId={selectedId}
               onSelect={setSelectedId}
+              expandedCollapsed={expandedCollapsed}
+              onToggleChild={toggleExpand}
+              dragOver={dragOverTicketId === group.ticket.id}
+              onDragStart={(e) => {
+                e.dataTransfer.setData("text/plain", group.ticket.id);
+                e.dataTransfer.effectAllowed = "move";
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOverTicketId(group.ticket.id);
+              }}
+              onDragLeave={() => setDragOverTicketId(null)}
+              onDrop={(e) => handleTicketDrop(group.ticket.id, e)}
             />
           ))}
         </ul>
       </div>
       <div className="tickets-tab-detail">
         {selectedTask === null ? (
-          <p className="tasks-empty">左のリストからチケット/タスクを選ぶと詳細を編集できます。</p>
+          <div className="ticket-detail ticket-detail-empty">
+            <p className="tasks-empty">左のリストからチケット/タスクを選ぶと詳細を編集できます。</p>
+          </div>
         ) : (
           <TicketDetail
             task={selectedTask}
+            depth={taskDepth(selectedTask, tasksById)}
             parent={selectedParent}
             children={selectedChildren}
             onSelectParent={setSelectedId}
@@ -117,33 +175,64 @@ export function TicketsTab({ filterGroupId }: TicketsTabProps) {
           />
         )}
       </div>
+      {createDialogOpen && (
+        <CreateTicketDialog
+          initialGroupId={initialGroupId}
+          onClose={() => setCreateDialogOpen(false)}
+          onCreated={(id) => {
+            setSelectedId(id);
+            setCreateDialogOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
 
 interface TicketMasterRowProps {
   group: TicketBundle;
+  categories: readonly Category[];
   expanded: boolean;
   onToggle: () => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  expandedCollapsed: ReadonlySet<string>;
+  onToggleChild: (id: string) => void;
+  dragOver: boolean;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragLeave: () => void;
+  onDrop: (e: React.DragEvent) => void;
 }
 
-function TicketMasterRow({ group, expanded, onToggle, selectedId, onSelect }: TicketMasterRowProps) {
+function TicketMasterRow({
+  group,
+  categories,
+  expanded,
+  onToggle,
+  selectedId,
+  onSelect,
+  expandedCollapsed,
+  onToggleChild,
+  dragOver,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+}: TicketMasterRowProps) {
   const actualMinutes = useAppStore((s) => s.taskActualMinutes);
   const { ticket, children } = group;
-  const status = statusConfig(ticket.status);
   const rollupActual = rollupActualMinutes(group, actualMinutes);
   const rollupEstimate = rollupEstimateMinutes(group);
-  const progress = childProgress(group);
 
   return (
-    <li className="ticket-block">
-      <button
-        type="button"
-        className={`task-row ticket master-row ${ticket.id === selectedId ? "selected" : ""}`}
-        onClick={() => onSelect(ticket.id)}
-      >
+    <li
+      className={`ticket-block ${dragOver ? "drag-over" : ""}`}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      <div className="ticket-row-line" draggable onDragStart={onDragStart}>
         <span
           className={`tree-caret-btn ${children.length > 0 ? "" : "hidden"}`}
           role="button"
@@ -157,48 +246,115 @@ function TicketMasterRow({ group, expanded, onToggle, selectedId, onSelect }: Ti
             <IconChevronRight size={13} />
           </span>
         </span>
-        <span className="lozenge" style={{ background: status.bg, color: status.text }}>
-          {status.label}
-        </span>
-        <span className="ticket-title master-title">{ticket.title}</span>
-        {progress !== null && (
-          <span className="ticket-progress">
-            {progress.done}/{progress.total}
-          </span>
-        )}
-        <span className="master-hours">
-          {rollupActual > 0 ? `${formatHours(rollupActual)}h` : "-"}
-          {rollupEstimate !== null && ` / ${formatHours(rollupEstimate)}h`}
-        </span>
-      </button>
+        <TicketRow
+          ticket={{
+            id: ticket.id,
+            displayNo: ticket.displayNo,
+            title: ticket.title,
+            status: ticket.status,
+            categoryId: ticket.categoryId,
+            childCount: children.length,
+            estimateMinutes: rollupEstimate,
+            actualMinutes: rollupActual,
+          }}
+          categories={categories}
+          selected={ticket.id === selectedId}
+          onSelect={onSelect}
+        />
+      </div>
       {expanded && children.length > 0 && (
         <ul className="task-children">
           {children.map((child) => (
-            <li key={child.id}>
-              <button
-                type="button"
-                className={`task-row child master-row ${child.id === selectedId ? "selected" : ""}`}
-                onClick={() => onSelect(child.id)}
-              >
-                <span className="child-indent" />
-                <span
-                  className="lozenge"
-                  style={{
-                    background: statusConfig(child.status).bg,
-                    color: statusConfig(child.status).text,
-                  }}
-                >
-                  {statusConfig(child.status).label}
-                </span>
-                <span className="master-title">{child.title}</span>
-                <span className="master-hours">
-                  {(actualMinutes.get(child.id) ?? 0) > 0
-                    ? `${formatHours(actualMinutes.get(child.id) ?? 0)}h`
-                    : "-"}
-                  {child.estimateMinutes !== null &&
-                    ` / ${formatHours(child.estimateMinutes)}h`}
-                </span>
-              </button>
+            <TicketChildRow
+              key={child.id}
+              child={child}
+              categories={categories}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              expanded={!expandedCollapsed.has(child.id)}
+              onToggle={() => onToggleChild(child.id)}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+interface TicketChildRowProps {
+  child: TicketChild;
+  categories: readonly Category[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  expanded: boolean;
+  onToggle: () => void;
+}
+
+function TicketChildRow({
+  child,
+  categories,
+  selectedId,
+  onSelect,
+  expanded,
+  onToggle,
+}: TicketChildRowProps) {
+  const actualMinutes = useAppStore((s) => s.taskActualMinutes);
+  const grandchildren = child.children;
+
+  return (
+    <li className="ticket-block child">
+      <div className="ticket-row-line child">
+        <span className="child-indent" />
+        <span
+          className={`tree-caret-btn ${grandchildren.length > 0 ? "" : "hidden"}`}
+          role="button"
+          tabIndex={-1}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle();
+          }}
+        >
+          <span className={`tree-caret ${expanded ? "open" : ""}`}>
+            <IconChevronRight size={13} />
+          </span>
+        </span>
+        <TicketRow
+          ticket={{
+            id: child.id,
+            displayNo: child.displayNo,
+            title: child.title,
+            status: child.status,
+            categoryId: child.categoryId,
+            childCount: grandchildren.length,
+            estimateMinutes: child.estimateMinutes,
+            actualMinutes: actualMinutes.get(child.id) ?? 0,
+          }}
+          categories={categories}
+          selected={child.id === selectedId}
+          onSelect={onSelect}
+        />
+      </div>
+      {expanded && grandchildren.length > 0 && (
+        <ul className="task-children">
+          {grandchildren.map((grandchild) => (
+            <li key={grandchild.id} className="ticket-row-line child grandchild">
+              <span className="child-indent" />
+              <span className="child-indent" />
+              <TicketRow
+                ticket={{
+                  id: grandchild.id,
+                  displayNo: grandchild.displayNo,
+                  title: grandchild.title,
+                  status: grandchild.status,
+                  categoryId: grandchild.categoryId,
+                  childCount: 0,
+                  estimateMinutes: grandchild.estimateMinutes,
+                  actualMinutes: actualMinutes.get(grandchild.id) ?? 0,
+                }}
+                categories={categories}
+                selected={grandchild.id === selectedId}
+                onSelect={onSelect}
+              />
             </li>
           ))}
         </ul>
@@ -209,6 +365,8 @@ function TicketMasterRow({ group, expanded, onToggle, selectedId, onSelect }: Ti
 
 interface TicketDetailProps {
   task: Task;
+  /** チケットからの深さ（0=チケット, 1=子タスク, 2=孫タスク） */
+  depth: number;
   parent: Task | null;
   children: Task[];
   onSelectParent: (id: string) => void;
@@ -218,6 +376,7 @@ interface TicketDetailProps {
 
 function TicketDetail({
   task,
+  depth,
   parent,
   children,
   onSelectParent,
@@ -232,8 +391,27 @@ function TicketDetail({
   const removeTask = useAppStore((s) => s.removeTask);
 
   const [newChildTitle, setNewChildTitle] = useState("");
+  const [workLog, setWorkLog] = useState<TimeEntry[]>([]);
   const isTicket = task.parentId === null;
+  const canAddChild = depth < 2;
   const actual = actualMinutes.get(task.id) ?? 0;
+
+  useEffect(() => {
+    let cancelled = false;
+    void listEntriesForTaskIds([task.id, ...children.map((c) => c.id)]).then((entries) => {
+      if (!cancelled) setWorkLog(entries);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [task.id, children]);
+
+  const childTitleById = useMemo(() => new Map(children.map((c) => [c.id, c.title])), [children]);
+
+  const sortedWorkLog = useMemo(
+    () => [...workLog].sort((a, b) => b.startAt.localeCompare(a.startAt)),
+    [workLog],
+  );
 
   const submitChild = () => {
     const title = newChildTitle.trim();
@@ -276,16 +454,19 @@ function TicketDetail({
         </button>
       </div>
 
-      <input
-        type="text"
-        className="ticket-detail-title-input"
-        defaultValue={task.title}
-        key={task.id}
-        onBlur={(e) => {
-          const title = e.target.value.trim();
-          if (title !== "" && title !== task.title) void updateTask({ ...task, title });
-        }}
-      />
+      <div className="ticket-detail-title-row">
+        <span className="ticket-detail-no">#{task.displayNo}</span>
+        <input
+          type="text"
+          className="ticket-detail-title-input"
+          defaultValue={task.title}
+          key={task.id}
+          onBlur={(e) => {
+            const title = e.target.value.trim();
+            if (title !== "" && title !== task.title) void updateTask({ ...task, title });
+          }}
+        />
+      </div>
 
       <div className="ticket-detail-field-row">
         <label className="ticket-detail-field">
@@ -390,6 +571,38 @@ function TicketDetail({
         実績合計: <strong>{actual > 0 ? `${formatHours(actual)} 時間` : "記録なし"}</strong>
       </p>
 
+      <div className="ticket-detail-worklog">
+        <span className="ticket-detail-label">作業ログ</span>
+        {sortedWorkLog.length === 0 ? (
+          <p className="ticket-detail-worklog-empty">記録された作業はありません。</p>
+        ) : (
+          <ul className="ticket-detail-worklog-list">
+            {sortedWorkLog.map((entry) => {
+              const start = fromLocalIso(entry.startAt);
+              const end = fromLocalIso(entry.endAt);
+              const childTitle = entry.taskId !== null ? childTitleById.get(entry.taskId) : undefined;
+              return (
+                <li key={entry.id} className="ticket-detail-worklog-row">
+                  <span className="ticket-detail-worklog-date">
+                    {start.getFullYear()}/{start.getMonth() + 1}/{start.getDate()}（
+                    {DOW_LABELS[start.getDay()]}）
+                  </span>
+                  <span className="ticket-detail-worklog-time">
+                    {formatHm(start)} - {formatHm(end)}
+                  </span>
+                  <span className="ticket-detail-worklog-duration">
+                    {formatHours(durationMinutes(entry.startAt, entry.endAt))}h
+                  </span>
+                  {childTitle !== undefined && (
+                    <span className="ticket-detail-worklog-child">{childTitle}</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
       <label className="ticket-detail-field full">
         <span className="ticket-detail-label">説明・メモ</span>
         <textarea
@@ -402,9 +615,9 @@ function TicketDetail({
         />
       </label>
 
-      {isTicket && (
+      {canAddChild && (
         <div className="ticket-detail-children">
-          <span className="ticket-detail-label">子タスク</span>
+          <span className="ticket-detail-label">{isTicket ? "子タスク" : "孫タスク"}</span>
           <ul className="ticket-detail-child-list">
             {children.map((child) => (
               <li key={child.id}>
@@ -431,11 +644,11 @@ function TicketDetail({
             <input
               type="text"
               className="text-input"
-              placeholder="子タスクを追加（Enter で登録）"
+              placeholder={isTicket ? "子タスクを追加（Enter で登録）" : "孫タスクを追加（Enter で登録）"}
               value={newChildTitle}
               onChange={(e) => setNewChildTitle(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") submitChild();
+                if (e.key === "Enter" && !e.nativeEvent.isComposing) submitChild();
               }}
             />
             <button type="button" className="btn" onClick={submitChild}>

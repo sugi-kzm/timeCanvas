@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "../../store/appStore";
 import { confirmDialog } from "../../store/confirmStore";
-import type { Task } from "../../types";
-import { groupTickets } from "../../lib/tickets";
+import { TicketCombobox } from "./TicketCombobox";
 
 function timePart(iso: string): string {
   return iso.slice(11, 16);
@@ -49,17 +48,6 @@ export function EntryDialog() {
   const [taskId, setTaskId] = useState<string | null>(initial?.taskId ?? null);
   const [error, setError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
-
-  // 選択肢: 未完了のチケット/タスク + 現在紐付いているもの（完了済みでも表示する）
-  const isSelectable = (t: Task) => t.status !== "done" || t.id === taskId;
-  const ticketGroups = useMemo(
-    () =>
-      groupTickets(tasks)
-        .map(({ ticket, children }) => ({ ticket, children: children.filter(isSelectable) }))
-        .filter(({ ticket, children }) => isSelectable(ticket) || children.length > 0),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tasks, taskId],
-  );
 
   useEffect(() => {
     titleRef.current?.focus();
@@ -175,28 +163,10 @@ export function EntryDialog() {
             />
           </label>
         </div>
-        {ticketGroups.length > 0 && (
+        {tasks.length > 0 && (
           <label className="field">
             <span className="field-label">チケット / タスク（見積と実績を紐付け）</span>
-            <select
-              className="select-input"
-              value={taskId ?? ""}
-              onChange={(e) => setTaskId(e.target.value === "" ? null : e.target.value)}
-            >
-              <option value="">なし</option>
-              {ticketGroups.map(({ ticket, children }) => (
-                <optgroup key={ticket.id} label={ticket.title}>
-                  {isSelectable(ticket) && (
-                    <option value={ticket.id}>{ticket.title}（チケット全体）</option>
-                  )}
-                  {children.map((child) => (
-                    <option key={child.id} value={child.id}>
-                      {child.title}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+            <TicketCombobox tasks={tasks} taskId={taskId} onChange={setTaskId} />
           </label>
         )}
         <label className="field">

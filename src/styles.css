@@ -245,6 +245,35 @@ button {
   cursor: default;
 }
 
+/* チケット/かんばん/ガントの underline スタイルタブバー */
+.view-switch.underline-tabs {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.view-switch.underline-tabs .seg {
+  border-bottom: 2px solid transparent;
+  padding: 8px 14px;
+  border-radius: 0;
+  margin-bottom: -1px;
+}
+
+.view-switch.underline-tabs .seg:hover:not(.active):not(:disabled) {
+  background: transparent;
+  color: var(--text);
+}
+
+.view-switch.underline-tabs .seg.active {
+  background: transparent;
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: none;
+}
+
 .toolbar-spacer {
   flex: 1;
 }
@@ -488,8 +517,8 @@ button {
   top: 0;
   z-index: 10;
   display: flex;
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  min-width: 827px;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
@@ -504,7 +533,8 @@ button {
 }
 
 .day-head {
-  flex: none;
+  flex: 1 1 0;
+  min-width: 0;
   text-align: center;
   padding: 6px 0 4px;
   font-size: 13px;
@@ -530,8 +560,8 @@ button {
 
 .week-body {
   display: flex;
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  min-width: 827px;
   background: var(--bg);
 }
 
@@ -554,7 +584,8 @@ button {
 }
 
 .day-columns {
-  flex: none;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   position: relative;
   cursor: default;
@@ -563,7 +594,8 @@ button {
 }
 
 .day-column {
-  flex: none;
+  flex: 1 1 0;
+  min-width: 0;
   position: relative;
   border-left: 1px solid var(--border);
 }
@@ -641,6 +673,14 @@ button {
   color: var(--text-2);
 }
 
+.entry-detail {
+  font-size: 11px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .resize-handle {
   position: absolute;
   left: 0;
@@ -655,6 +695,25 @@ button {
 
 .resize-handle.bottom {
   bottom: -2px;
+}
+
+/* 日表示（横軸）ではエントリブロックが左右に伸びるため、リサイズハンドルも左右端・横方向カーソルにする */
+.day-view-track .resize-handle {
+  top: 0;
+  bottom: 0;
+  left: auto;
+  right: auto;
+  width: 6px;
+  height: auto;
+  cursor: ew-resize;
+}
+
+.day-view-track .resize-handle.top {
+  left: -2px;
+}
+
+.day-view-track .resize-handle.bottom {
+  right: -2px;
 }
 
 .drag-ghost {
@@ -702,6 +761,91 @@ button {
   height: 8px;
   border-radius: 50%;
   background: var(--now-line);
+}
+
+/* ---------- 日表示（横軸） ---------- */
+
+.day-view {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.day-view-scroll {
+  flex: 1;
+  overflow: auto;
+  background: var(--panel);
+  padding: 8px 12px 16px;
+}
+
+.day-view-hours {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--panel);
+}
+
+.day-view-hours-spacer {
+  flex: none;
+  width: 0;
+}
+
+.day-view-hours-track {
+  position: relative;
+  flex: none;
+  min-width: 100%;
+  height: 22px;
+}
+
+.day-view-hour-label {
+  position: absolute;
+  top: 0;
+  font-size: 11px;
+  color: var(--text-3);
+  transform: translateX(2px);
+  white-space: nowrap;
+}
+
+.day-view-track {
+  position: relative;
+  margin-top: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: default;
+  touch-action: none;
+  overflow: hidden;
+}
+
+.day-view-hour-cell {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--grid-hour);
+}
+
+.day-view-now-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 2px solid var(--now-line);
+  z-index: 4;
+  pointer-events: none;
+}
+
+.day-view-now-line .now-dot {
+  left: -5px;
+  top: -4px;
+}
+
+.drag-ghost.horizontal {
+  left: auto;
+  right: auto;
+  top: 2px;
+  bottom: 2px;
+  height: auto;
 }
 
 /* ---------- 月表示 ---------- */
@@ -830,11 +974,20 @@ button {
 .tasks-view {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--bg);
+  scrollbar-gutter: stable;
 }
 
 .tasks-inner {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   max-width: 860px;
   margin: 0 auto;
   padding: 28px 32px 60px;
@@ -864,36 +1017,31 @@ button {
   border-bottom: 1px solid var(--border);
 }
 
-.task-row.ticket {
+.ticket-block.drag-over {
+  outline: 2px dashed var(--border-strong);
+  outline-offset: -2px;
+}
+
+.ticket-row-line {
+  display: flex;
+  align-items: center;
   background: var(--panel);
-  border-bottom: none;
   border-radius: 6px;
   margin-top: 6px;
 }
 
-.ticket-title {
-  font-weight: 600;
-}
-
-.ticket-progress {
-  flex: none;
-  font-size: 11px;
-  color: var(--text-2);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1px 8px;
+.ticket-row-line.child {
+  background: transparent;
+  border-radius: 0;
+  margin-top: 0;
+  border-bottom: 1px solid var(--border);
+  padding-left: 8px;
 }
 
 .task-children {
   list-style: none;
   margin: 0;
   padding: 0 0 6px;
-}
-
-.task-row.child {
-  border-bottom: none;
-  padding-left: 8px;
 }
 
 .child-indent {
@@ -1517,6 +1665,15 @@ button {
   color: var(--text-2);
 }
 
+.quick-create-drag-handle {
+  cursor: grab;
+  user-select: none;
+}
+
+.quick-create-drag-handle:active {
+  cursor: grabbing;
+}
+
 .quick-create-actions {
   display: flex;
   align-items: center;
@@ -1629,6 +1786,63 @@ button {
   resize: vertical;
 }
 
+.ticket-combobox {
+  position: relative;
+}
+
+.ticket-combobox-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+}
+
+.ticket-combobox-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ticket-combobox-option.highlight,
+.ticket-combobox-option:hover {
+  background: var(--hover);
+}
+
+.ticket-combobox-option.selected {
+  font-weight: 600;
+}
+
+.ticket-combobox-no {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.ticket-combobox-category {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.ticket-combobox-empty {
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
 /* ---------- 設定 ---------- */
 
 .settings-dialog {
@@ -1726,6 +1940,14 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.settings-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: normal;
 }
 
 /* ---------- ノート画面 ---------- */
@@ -2097,6 +2319,10 @@ button {
   margin-bottom: 12px;
 }
 
+.tasks-header-row.compact {
+  justify-content: flex-start;
+}
+
 .tasks-header-row .tasks-heading {
   margin: 0;
 }
@@ -2107,8 +2333,10 @@ button {
 
 .kanban {
   display: flex;
+  flex: 1;
+  min-height: 0;
   gap: 14px;
-  align-items: flex-start;
+  align-items: stretch;
   overflow-x: auto;
   padding-bottom: 12px;
 }
@@ -2139,12 +2367,18 @@ button {
 .kanban-status-chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  width: fit-content;
+  margin: 0 auto;
   font-size: 12px;
   font-weight: 600;
   background: rgba(255, 255, 255, 0.65);
   border-radius: 10px;
-  padding: 2px 10px;
+  padding: 2px 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kanban-status-dot {
@@ -2159,6 +2393,9 @@ button {
 }
 
 .kanban-cards {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2226,6 +2463,13 @@ button {
   gap: 6px;
   font-size: 11px;
   color: var(--text-2);
+}
+
+.kanban-card-category {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kanban-card-hours {
@@ -2346,6 +2590,10 @@ button {
   text-decoration: line-through;
 }
 
+.gantt-title.ticket-title {
+  font-weight: 600;
+}
+
 .gantt-status-chip {
   flex: none;
   font-size: 10px;
@@ -2442,6 +2690,7 @@ button {
   border-radius: 9px;
   opacity: 0.9;
   pointer-events: none;
+  overflow: hidden;
 }
 
 .gantt-bar.derived {
@@ -2451,6 +2700,15 @@ button {
 .gantt-bar.preview {
   opacity: 0.55;
   outline: 1.5px dashed rgba(55, 53, 47, 0.35);
+}
+
+.gantt-bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.32);
+  border-radius: inherit;
 }
 
 .gantt-today-line {
@@ -2467,15 +2725,6 @@ button {
   font-size: 11px;
   color: var(--text-3);
   margin: 0;
-}
-
-.gantt-empty-left {
-  min-height: 52px;
-}
-
-.gantt-empty-text {
-  font-size: 12px;
-  color: var(--text-3);
 }
 
 .gantt-add-left {
@@ -2530,15 +2779,24 @@ button {
 
 /* ---------- チケット画面の分類サイドバー ---------- */
 
+.tasks-tabs-row {
+  margin-bottom: 12px;
+  /* .seg の左 padding(14px) を足すと .tickets-side-item-all の text-start(28px) に一致する */
+  padding-left: 14px;
+}
+
 .tickets-layout {
   display: flex;
+  flex: 1;
+  min-height: 0;
   gap: 18px;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 .tickets-side {
   width: 150px;
   flex: none;
+  align-self: flex-start;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -2573,6 +2831,14 @@ button {
 .tickets-side-item.add {
   font-size: 12px;
   color: var(--text-3);
+}
+
+.tickets-side-checkbox {
+  cursor: pointer;
+}
+
+.tickets-side-item-all {
+  padding-left: calc(8px + 13px + 7px);
 }
 
 .tickets-side-row {
@@ -2619,6 +2885,10 @@ button {
 .tickets-main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
 }
 
 /* ---------- チケットタブ（マスタ・ディテール） ---------- */
@@ -2630,42 +2900,122 @@ button {
 }
 
 .tickets-tab-master {
-  flex: 1.3;
+  flex: 1;
   min-width: 0;
 }
 
-.tickets-tab-detail {
-  flex: 1;
-  min-width: 320px;
-  position: sticky;
-  top: 0;
+.ticket-sort-switch {
+  margin-left: auto;
 }
 
-.master-row {
+.tickets-tab-totals {
+  align-self: center;
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.tickets-tab-detail {
+  width: 380px;
+  flex: none;
+  position: sticky;
+  top: 0;
+  scrollbar-gutter: stable;
+}
+
+.ticket-row-grid {
+  display: grid;
+  grid-template-columns: 76px 1fr 60px 110px 64px 64px;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
   width: 100%;
   text-align: left;
   font-family: inherit;
+  font-size: 13px;
+  border: none;
   background: transparent;
+  padding: 8px 10px;
   cursor: pointer;
 }
 
-.master-row.selected {
+.ticket-list-header {
+  display: grid;
+  grid-template-columns: 76px 1fr 60px 110px 64px 64px;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.ticket-list-header span {
+  text-align: center;
+}
+
+.ticket-list-header span:last-child,
+.ticket-list-header span:nth-last-child(2) {
+  text-align: right;
+}
+
+.ticket-row-grid.selected {
   background: var(--accent-soft);
 }
 
-.master-title {
-  flex: 1;
+.ticket-row-title {
+  font-weight: 600;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.master-hours {
+.ticket-row-no {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-weight: 400;
+  color: var(--text-3);
+}
+
+.ticket-row-subtasks {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.ticket-row-category {
+  display: inline-flex;
+  justify-content: center;
+  justify-self: center;
+  max-width: 100%;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 2px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-row-category.empty {
+  background: transparent;
+  color: var(--text-3);
+  font-weight: 400;
+}
+
+.ticket-row-estimate,
+.ticket-row-actual {
   flex: none;
   font-size: 12px;
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 /* Atlassian 風の「ロゼンジ」ステータスバッジ（角丸4px、ピルではない） */
@@ -2676,6 +3026,14 @@ button {
   padding: 2px 8px;
   border-radius: 4px;
   white-space: nowrap;
+}
+
+.ticket-row-grid .lozenge {
+  display: inline-flex;
+  justify-content: center;
+  justify-self: center;
+  width: 64px;
+  text-align: center;
 }
 
 .lozenge.small {
@@ -2694,6 +3052,17 @@ button {
   background: var(--bg);
 }
 
+.ticket-detail-empty {
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  text-align: center;
+}
+
+.ticket-detail-empty .tasks-empty {
+  padding: 0;
+}
+
 .ticket-detail-header {
   display: flex;
   align-items: center;
@@ -2703,7 +3072,22 @@ button {
   font-size: 12px;
 }
 
+.ticket-detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ticket-detail-no {
+  flex: none;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  color: var(--text-3);
+}
+
 .ticket-detail-title-input {
+  flex: 1;
+  min-width: 0;
   border: none;
   background: transparent;
   font-family: inherit;
@@ -2775,6 +3159,70 @@ button {
 
 .task-add-row.small {
   margin-bottom: 0;
+}
+
+.ticket-detail-worklog {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.ticket-detail-worklog-empty {
+  color: var(--text-3);
+  font-size: 12px;
+  margin: 0;
+}
+
+.ticket-detail-worklog-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.ticket-detail-worklog-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 2px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ticket-detail-worklog-date {
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.ticket-detail-worklog-time {
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.ticket-detail-worklog-duration {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.ticket-detail-worklog-child {
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  background: var(--hover);
+  border-radius: 3px;
+  padding: 1px 6px;
 }
 
 .ticket-detail-footer {
@@ -2881,6 +3329,103 @@ button {
   text-align: right;
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 履歴ビュー（トップレベル） ---------- */
+
+.history-period-nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: none;
+  width: 260px;
+}
+
+.history-period-nav .btn.icon-btn {
+  flex: none;
+}
+
+.history-period-label {
+  font-size: 13px;
+  color: var(--text-2);
+  width: 200px;
+  flex: none;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-main {
+  gap: 20px;
+}
+
+.history-ticket-list {
+  margin: 0 0 8px;
+}
+
+.history-view-type {
+  position: relative;
+  flex: none;
+}
+
+.history-view-type-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(15, 15, 15, 0.12);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+}
+
+.history-view-type-item {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--text-2);
+}
+
+.history-view-type-item:hover {
+  background: var(--hover);
+}
+
+.history-view-type-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.history-heatmap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.history-heatmap-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.history-heatmap-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-2);
 }
 
 /* ---------- カンバンの空表示 ---------- */

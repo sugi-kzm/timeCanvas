@@ -1,5 +1,5 @@
 import type { Category, Task, TimeEntry } from "../types";
-import { addDays, dateKey, durationMinutes, startOfWeek, type WeekStartsOn } from "./dates";
+import { addDays, dateKey, durationMinutes, startOfDay, startOfWeek, type WeekStartsOn } from "./dates";
 import { UNCATEGORIZED_COLOR, UNCATEGORIZED_LABEL } from "./summary";
 import { groupTickets, rollupActualMinutes, rollupEstimateMinutes } from "./tickets";
 
@@ -64,6 +64,81 @@ export function buildYearHeatmap(
   return weeks;
 }
 
+/** 日付キー（YYYY-MM-DD）ごとに、カテゴリ別の記録分数を集計する */
+export function minutesByDayAndCategory(
+  entries: readonly TimeEntry[],
+): Map<string, Map<string | null, number>> {
+  const map = new Map<string, Map<string | null, number>>();
+  for (const entry of entries) {
+    const key = entry.startAt.slice(0, 10);
+    const minutes = Math.max(0, durationMinutes(entry.startAt, entry.endAt));
+    const byCategory = map.get(key) ?? new Map<string | null, number>();
+    byCategory.set(entry.categoryId, (byCategory.get(entry.categoryId) ?? 0) + minutes);
+    map.set(key, byCategory);
+  }
+  return map;
+}
+
+export interface CategoryHeatmap {
+  categoryId: string | null;
+  name: string;
+  color: string;
+  weeks: HeatmapCell[][];
+}
+
+/**
+ * 指定した任意期間（履歴ビューの週/月/年など）のヒートマップグリッドを、
+ * カテゴリごとに分けて作る（GitHub の草表示をカテゴリ別に並べたもの）。
+ * グリッドは range の週始めから週終わりまで（範囲外の日は inYear=false 相当で除外）。
+ */
+export function buildCategoryHeatmaps(
+  from: Date,
+  to: Date,
+  minutesByDayCategory: ReadonlyMap<string, ReadonlyMap<string | null, number>>,
+  categories: readonly Category[],
+  weekStartsOn: WeekStartsOn = 0,
+): CategoryHeatmap[] {
+  const gridStart = startOfWeek(from, weekStartsOn);
+  const rangeEnd = addDays(startOfDay(to), -1);
+  const byId = new Map(categories.map((c) => [c.id, c]));
+
+  const usedCategoryIds = new Set<string | null>();
+  for (const byCategory of minutesByDayCategory.values()) {
+    for (const categoryId of byCategory.keys()) usedCategoryIds.add(categoryId);
+  }
+
+  return [...usedCategoryIds]
+    .map((categoryId) => {
+      const category = categoryId !== null ? byId.get(categoryId) : undefined;
+      const weeks: HeatmapCell[][] = [];
+      let cursor = gridStart;
+      while (cursor <= rangeEnd) {
+        const week: HeatmapCell[] = [];
+        for (let i = 0; i < 7; i++) {
+          const date = addDays(cursor, i);
+          const key = dateKey(date);
+          const dayMinutes = minutesByDayCategory.get(key)?.get(categoryId) ?? 0;
+          week.push({
+            key,
+            date,
+            minutes: dayMinutes,
+            level: heatmapLevel(dayMinutes),
+            inYear: date >= startOfDay(from) && date <= rangeEnd,
+          });
+        }
+        weeks.push(week);
+        cursor = addDays(cursor, 7);
+      }
+      return {
+        categoryId,
+        name: category?.name ?? UNCATEGORIZED_LABEL,
+        color: category?.color ?? UNCATEGORIZED_COLOR,
+        weeks,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, "ja"));
+}
+
 export interface EstimateComparison {
   task: Task;
   estimateMinutes: number;
@@ -82,7 +157,7 @@ export function compareEstimates(
   tasks: readonly Task[],
   actualByTask: ReadonlyMap<string, number>,
 ): EstimateComparison[] {
-  return groupTickets(tasks)
+  return groupTickets(tasks, "due")
     .map((group) => {
       const estimateMinutes = rollupEstimateMinutes(group);
       return {

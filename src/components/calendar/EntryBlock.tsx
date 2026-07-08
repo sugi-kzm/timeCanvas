@@ -15,6 +15,11 @@ interface EntryBlockProps {
   selected: boolean;
   onDragInit: (entry: TimeEntry, mode: EntryDragMode, e: React.PointerEvent) => void;
   onOpen: (entry: TimeEntry) => void;
+  onContextMenu?: (entry: TimeEntry, e: React.MouseEvent) => void;
+  /** 日表示（横軸）など、left/width を % ではなく px で上書きしたい場合に使う */
+  style?: React.CSSProperties;
+  /** 日表示のみ：メモ先頭1行やカテゴリ名などの補足情報。渡された場合のみタイトル+時刻の下に表示する */
+  detail?: string;
 }
 
 export function EntryBlock({
@@ -27,6 +32,9 @@ export function EntryBlock({
   selected,
   onDragInit,
   onOpen,
+  onContextMenu,
+  style,
+  detail,
 }: EntryBlockProps) {
   const color = category?.color ?? UNCATEGORIZED_COLOR;
   const showTime = height >= 34;
@@ -43,12 +51,19 @@ export function EntryBlock({
         background: hexToRgba(color, 0.14),
         borderLeftColor: color,
         outlineColor: color,
+        ...style,
       }}
       onPointerDown={(e) => {
         e.stopPropagation();
         onDragInit(entry, "move", e);
       }}
       onDoubleClick={() => onOpen(entry)}
+      onContextMenu={(e) => {
+        if (onContextMenu === undefined) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onContextMenu(entry, e);
+      }}
       title={`${entry.title}\n${formatHm(fromLocalIso(entry.startAt))} - ${formatHm(fromLocalIso(entry.endAt))}`}
     >
       <div
@@ -66,6 +81,7 @@ export function EntryBlock({
           {formatHm(fromLocalIso(entry.startAt))} - {formatHm(fromLocalIso(entry.endAt))}
         </div>
       )}
+      {detail !== undefined && <div className="entry-detail">{detail}</div>}
       <div
         className="resize-handle bottom"
         onPointerDown={(e) => {
